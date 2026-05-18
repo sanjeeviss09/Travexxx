@@ -129,7 +129,7 @@ export default function BookTransport() {
         reason: formData.type === 'External' ? formData.reason : null,
         passengerCount: 1,
         urgency: 'NORMAL',
-        status: formData.inBetween ? 'PENDING_APPROVAL' : 'CONFIRMED',
+        status: 'CONFIRMED',
       };
       
       const res = await axios.post(`${API}/bookings/request`, payload);

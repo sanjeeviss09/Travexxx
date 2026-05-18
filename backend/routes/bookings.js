@@ -714,6 +714,16 @@ router.patch('/:id', async (req, res) => {
 
     if (error) throw error;
 
+    // Handle waitlist cleanup/addition on override
+    if (status === 'CONFIRMED' || status === 'CANCELLED') {
+      await supabase.from('waitlists').delete().eq('booking_id', id);
+    } else if (status === 'WAITLISTED') {
+      const { data: existing } = await supabase.from('waitlists').select('id').eq('booking_id', id);
+      if (!existing || existing.length === 0) {
+        await supabase.from('waitlists').insert([{ booking_id: id, waitlist_position: 99, priority: 5 }]);
+      }
+    }
+
     // Notify employee if status changed
     if (booking.employees?.email) {
       sendEmail(
