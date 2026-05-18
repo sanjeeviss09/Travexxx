@@ -61,7 +61,8 @@ router.get('/', async (req, res) => {
           if (meridiem?.toUpperCase() === 'PM' && hours !== 12) hours += 12;
           if (meridiem?.toUpperCase() === 'AM' && hours === 12) hours = 0;
           
-          const endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0);
+          const [year, month, day] = targetDate.split('-').map(Number);
+          const endTime = new Date(year, month - 1, day, hours, minutes, 0);
           // If more than 1 hour has passed since end time, don't count as occupied in current live view
           return (now.getTime() - endTime.getTime()) < (60 * 60 * 1000);
         } catch (e) {
