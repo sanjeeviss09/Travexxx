@@ -38,19 +38,32 @@ app.use('/api/drivers', driverRoutes);
 app.use('/api/routes', transportRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
+const fs = require('fs');
 const path = require('path');
 
-// Serve static files from the React frontend app build directory
+// Serve static files from the React frontend app build directory if it exists
 const frontendDistPath = path.join(__dirname, '../frontend/dist');
-app.use(express.static(frontendDistPath));
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
 
-// For all other requests (except API and static files), send back React's index.html
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api')) {
-    return next();
-  }
-  res.sendFile(path.join(frontendDistPath, 'index.html'));
-});
+  // For all other requests (except API and static files), send back React's index.html
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+} else {
+  // Safe landing page for split deployments (e.g. Vercel frontend + Render backend)
+  app.get('/', (req, res) => {
+    res.status(200).json({
+      status: 'ok',
+      message: '🚀 Revexy Transport API Server is fully operational!',
+      deployment: 'Render.com (Backend Services)',
+      healthCheck: '/health'
+    });
+  });
+}
 
 // Global error handler
 app.use((err, req, res, next) => {
