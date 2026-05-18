@@ -78,7 +78,17 @@ server.listen(PORT, () => {
   // Start background jobs
   const { startAutoCancelJob } = require('./jobs/autoCancelJob');
   const { startEmailListener } = require('./services/emailListener');
-  
+
   startAutoCancelJob();
   startEmailListener();
+
+  // ── Keep-alive self-ping every 5 min to prevent Render free tier sleep ──
+  const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+  setInterval(() => {
+    http.get(`${SELF_URL}/health`, (res) => {
+      console.log(`🔔 Keep-alive ping → ${res.statusCode}`);
+    }).on('error', (err) => {
+      console.warn(`⚠️  Keep-alive ping failed: ${err.message}`);
+    });
+  }, 5 * 60 * 1000); // every 5 minutes
 });

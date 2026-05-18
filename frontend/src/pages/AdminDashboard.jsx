@@ -1161,13 +1161,15 @@ export default function AdminDashboard() {
 
       {/* Tab Panel */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden transition-colors duration-300">
-        <div className="border-b border-gray-100 dark:border-slate-700 px-6 flex items-center justify-between">
-          <nav className="flex space-x-1 overflow-x-auto tabs-scroll">
+
+        {/* ── Tab Bar (scrollable) ── */}
+        <div className="border-b border-gray-100 dark:border-slate-700 overflow-x-auto tabs-scroll">
+          <nav className="flex space-x-1 px-4 min-w-max">
             {tabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`py-4 px-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                className={`py-4 px-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? 'border-blue-600 text-blue-700 dark:text-blue-400'
                     : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
@@ -1177,44 +1179,31 @@ export default function AdminDashboard() {
               </button>
             ))}
           </nav>
-          {activeTab === 'employees' && (
-            <div className="flex space-x-3 flex-shrink-0 ml-4">
-              <button
-                onClick={handleDownloadTemplate}
-                className="flex items-center px-4 py-2 bg-white border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-                title="Download Sample Format"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Format
-              </button>
-              <button
-                onClick={() => setShowImport(true)}
-                className="flex items-center px-4 py-2 bg-white border border-blue-600 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-50 transition-colors"
-              >
-                <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Import HR Excel
-              </button>
-              <button
-                onClick={() => setShowAddEmployee(true)}
-                className="flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Employee
-              </button>
-            </div>
-          )}
-          {(activeTab === 'vehicles' || activeTab === 'drivers') && (
-            <button
-              onClick={() => activeTab === 'vehicles' ? setShowAddVehicle(true) : setShowAddDriver(true)}
-              className="flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0 ml-4"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add {activeTab === 'vehicles' ? 'Vehicle' : 'Driver'}
-            </button>
-          )}
         </div>
 
-        <div className="p-6">
+        {/* ── Action Button Bar (below tabs, wraps on mobile) ── */}
+        {activeTab === 'employees' && (
+          <div className="flex flex-wrap gap-2 px-4 py-3 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-100 dark:border-slate-700">
+            <button onClick={handleDownloadTemplate} className="flex items-center px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+              <Download className="h-4 w-4 mr-1.5" />Format
+            </button>
+            <button onClick={() => setShowImport(true)} className="flex items-center px-3 py-2 bg-white dark:bg-slate-800 border border-blue-600 text-blue-600 dark:text-blue-400 text-sm font-medium rounded-lg hover:bg-blue-50 transition-colors">
+              <FileSpreadsheet className="h-4 w-4 mr-1.5" />Import HR Excel
+            </button>
+            <button onClick={() => setShowAddEmployee(true)} className="flex items-center px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
+              <Plus className="h-4 w-4 mr-1.5" />Add Employee
+            </button>
+          </div>
+        )}
+        {(activeTab === 'vehicles' || activeTab === 'drivers') && (
+          <div className="px-4 py-3 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-100 dark:border-slate-700">
+            <button onClick={() => activeTab === 'vehicles' ? setShowAddVehicle(true) : setShowAddDriver(true)} className="flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
+              <Plus className="h-4 w-4 mr-2" />Add {activeTab === 'vehicles' ? 'Vehicle' : 'Driver'}
+            </button>
+          </div>
+        )}
+
+        <div className="p-4 lg:p-6">
           {/* OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
@@ -1533,7 +1522,49 @@ export default function AdminDashboard() {
                   <RefreshCw className="h-4 w-4" />
                 </button>
               </div>
-              <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700">
+              {/* ── Mobile Cards ── */}
+              <div className="sm:hidden space-y-3">
+                {loadingEmployees ? (
+                  <div className="py-8 text-center text-sm text-gray-500">Loading employees...</div>
+                ) : filtered.length === 0 ? (
+                  <div className="py-10 text-center"><Users className="h-8 w-8 text-gray-200 mx-auto mb-2" /><p className="text-sm text-gray-400">No employees yet.</p></div>
+                ) : filtered.map((emp) => (
+                  <div key={emp.id} className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-gray-100 dark:border-slate-700 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center flex-shrink-0">
+                          <span className="text-white text-sm font-bold">{emp.name?.[0]}</span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white">{emp.name}</p>
+                          <p className="text-xs text-gray-400">{emp.employee_id}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        <button onClick={() => { setEditingEmployee(emp); setShowAddEmployee(true); }} className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-colors"><Edit2 className="h-4 w-4" /></button>
+                        <button onClick={() => handleDeleteEmployee(emp.id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-colors"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5">
+                        <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wide">Department</p>
+                        <p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5 truncate">{emp.department || '—'}</p>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5">
+                        <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wide">Designation</p>
+                        <p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5 truncate">{emp.designation || '—'}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2.5">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${emp.account_status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                        {emp.account_status === 'ACTIVE' ? '● Active' : '○ Inactive'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* ── Desktop Table ── */}
+              <div className="hidden sm:block overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700">
                 <table className="min-w-full divide-y divide-gray-100 dark:divide-slate-700">
                   <thead>
                     <tr className="bg-gray-50 dark:bg-slate-900/50">
@@ -1548,55 +1579,14 @@ export default function AdminDashboard() {
                     {loadingEmployees ? (
                       <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-500">Loading employees...</td></tr>
                     ) : filtered.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-4 py-12 text-center">
-                          <Users className="h-8 w-8 text-gray-200 mx-auto mb-2" />
-                          <p className="text-sm text-gray-400">No employees yet. Import from HR Excel to get started.</p>
-                        </td>
-                      </tr>
+                      <tr><td colSpan={5} className="px-4 py-12 text-center"><Users className="h-8 w-8 text-gray-200 mx-auto mb-2" /><p className="text-sm text-gray-400">No employees yet. Import from HR Excel to get started.</p></td></tr>
                     ) : filtered.map((emp) => (
                       <tr key={emp.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors duration-150">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center flex-shrink-0">
-                              <span className="text-white text-xs font-bold">{emp.name?.[0]}</span>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{emp.name}</p>
-                              <p className="text-xs text-gray-400 dark:text-slate-500">{emp.employee_id}</p>
-                            </div>
-                          </div>
-                        </td>
+                        <td className="px-4 py-3"><div className="flex items-center space-x-3"><div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center flex-shrink-0"><span className="text-white text-xs font-bold">{emp.name?.[0]}</span></div><div><p className="text-sm font-medium text-gray-900 dark:text-slate-100">{emp.name}</p><p className="text-xs text-gray-400 dark:text-slate-500">{emp.employee_id}</p></div></div></td>
                         <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-300">{emp.department}</td>
                         <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-300">{emp.designation}</td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            emp.account_status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-                          }`}>
-                            {emp.account_status === 'ACTIVE' ? '● Active' : '○ Inactive'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end space-x-2">
-                            <button 
-                              onClick={() => { setEditingEmployee(emp); setShowAddEmployee(true); }} 
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-                              title="Edit Employee"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteEmployee(emp.id)}
-                              className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                              title="Delete Employee"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                            <button className="p-1.5 text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="View Details">
-                              <Eye className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
+                        <td className="px-4 py-3"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${emp.account_status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>{emp.account_status === 'ACTIVE' ? '● Active' : '○ Inactive'}</span></td>
+                        <td className="px-4 py-3 text-right"><div className="flex justify-end space-x-2"><button onClick={() => { setEditingEmployee(emp); setShowAddEmployee(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"><Edit2 className="h-4 w-4" /></button><button onClick={() => handleDeleteEmployee(emp.id)} className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"><Trash2 className="h-4 w-4" /></button><button className="p-1.5 text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg transition-colors"><Eye className="h-4 w-4" /></button></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1608,7 +1598,46 @@ export default function AdminDashboard() {
           {/* VEHICLES */}
           {activeTab === 'vehicles' && (
             <div className="space-y-4">
-              <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700">
+              {/* ── Mobile Vehicle Cards ── */}
+              <div className="sm:hidden space-y-3">
+                {Array.isArray(vehicles) && vehicles.length === 0 ? (
+                  <div className="py-10 text-center"><Car className="h-8 w-8 text-gray-200 mx-auto mb-2" /><p className="text-sm text-gray-400">No vehicles added yet.</p></div>
+                ) : Array.isArray(vehicles) && vehicles.map((v, i) => (
+                  <div key={v.id || i} className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-gray-100 dark:border-slate-700 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0"><p className="text-sm font-bold text-gray-900 dark:text-white">{v.name}</p><p className="text-xs text-gray-400 mt-0.5">{v.reg}</p></div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${v.status === 'ON ROUTE' || v.status === 'On Route' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>{v.status || 'Available'}</span>
+                        <button onClick={() => { setEditingVehicle(v); setShowAddVehicle(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-xl"><Edit2 className="h-4 w-4" /></button>
+                        <button onClick={() => handleDeleteVehicle(v.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-xl"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Driver</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5 truncate">{v.driver}</p></div>
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Seats</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{v.occupied}/{v.capacity} filled</p></div>
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Insurance</p><p className={`text-xs font-semibold mt-0.5 ${v.insAlert ? 'text-red-500' : 'text-green-600'}`}>{v.insAlert ? '⚠ Expiring' : '✓ Valid'}</p></div>
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Route</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5 truncate">{v.route}</p></div>
+                    </div>
+                    <button onClick={() => { setExpandedVehicle(expandedVehicle === v.id ? null : v.id); if(expandedVehicle !== v.id) fetchManifest(v.id); }} className="mt-3 w-full py-2 text-xs font-semibold text-blue-600 bg-blue-50 dark:bg-blue-900/20 rounded-xl hover:bg-blue-100 transition-colors">
+                      {expandedVehicle === v.id ? '▲ Hide Manifest' : '▼ View Manifest'}
+                    </button>
+                    {expandedVehicle === v.id && (
+                      <div className="mt-3 space-y-1.5">
+                        {loadingManifest[v.id] && <p className="text-xs text-center text-gray-400 animate-pulse">Loading...</p>}
+                        {!manifests[v.id] && !loadingManifest[v.id] && <button onClick={() => fetchManifest(v.id)} className="w-full py-2 text-xs text-gray-400 border border-dashed rounded-lg">Tap to load passenger list</button>}
+                        {manifests[v.id] && (<>
+                          <p className="text-[10px] font-bold text-green-600 uppercase">✓ Confirmed ({manifests[v.id]?.confirmed?.length || 0})</p>
+                          {manifests[v.id]?.confirmed?.map(b => (<div key={b.id} className="flex justify-between text-xs bg-green-50 dark:bg-green-900/10 rounded-lg px-2.5 py-1.5"><span className="font-medium">{b.employees?.name}</span><span className="text-gray-400">{b.pickup_point}</span></div>))}
+                          <p className="text-[10px] font-bold text-orange-600 uppercase mt-2">⏳ Waitlisted ({manifests[v.id]?.waitlisted?.length || 0})</p>
+                          {manifests[v.id]?.waitlisted?.map(b => (<div key={b.id} className="flex justify-between text-xs bg-orange-50 dark:bg-orange-900/10 rounded-lg px-2.5 py-1.5"><span className="font-medium">{b.employees?.name}</span><span className="text-orange-500">#{b.waitlist_position}</span></div>))}
+                        </>)}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* ── Desktop Table ── */}
+              <div className="hidden sm:block overflow-x-auto rounded-xl border border-gray-100 dark:border-slate-700">
                 <table className="min-w-full divide-y divide-gray-100 dark:divide-slate-700">
                   <thead>
                     <tr className="bg-gray-50 dark:bg-slate-900/50">
@@ -1794,7 +1823,36 @@ export default function AdminDashboard() {
           {/* DRIVERS */}
           {activeTab === 'drivers' && (
             <div className="space-y-4">
-              <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700">
+              {/* ── Mobile Driver Cards ── */}
+              <div className="sm:hidden space-y-3">
+                {drivers.length === 0 ? (
+                  <div className="py-10 text-center"><Truck className="h-8 w-8 text-gray-200 mx-auto mb-2" /><p className="text-sm text-gray-400">No drivers added yet.</p></div>
+                ) : drivers.map((d, i) => (
+                  <div key={d.id || i} className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-gray-100 dark:border-slate-700 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0"><p className="text-sm font-bold text-gray-900 dark:text-white">{d.name}</p><p className="text-xs text-gray-400 mt-0.5">Age: {d.age} · {d.mobile}</p></div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button onClick={() => { setEditingDriver(d); setShowAddDriver(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-xl"><Edit2 className="h-4 w-4" /></button>
+                        <button onClick={() => handleDeleteDriver(d.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-xl"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">License</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{d.license || '—'}</p></div>
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Expiry</p><p className={`text-xs font-semibold mt-0.5 ${d.expiryAlert ? 'text-red-500' : 'text-gray-800 dark:text-slate-200'}`}>{d.exp || '—'}</p></div>
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Vehicle</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{d.vehicle ? (vehicles.find(v => v.id === d.vehicle)?.reg || 'Assigned') : 'Unassigned'}</p></div>
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Rating</p><p className="text-xs font-semibold text-blue-600 mt-0.5">⭐ {d.rating}</p></div>
+                    </div>
+                    <div className="mt-2.5 grid grid-cols-2 gap-2">
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Driver ID</p><p className="text-xs font-mono font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{d.driver_id || '—'}</p></div>
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Login PIN</p><p className="text-xs font-mono font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{d.pin_hash || '—'}</p></div>
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Total Trips</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{d.totalTrips || 0}</p></div>
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">On-Time %</p><p className="text-xs font-semibold text-green-600 mt-0.5">{d.onTimePercentage || 100}%</p></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* ── Desktop Table ── */}
+              <div className="hidden sm:block overflow-x-auto rounded-xl border border-gray-100 dark:border-slate-700">
                 <table className="min-w-full divide-y divide-gray-100 dark:divide-slate-700">
                   <thead>
                     <tr className="bg-gray-50 dark:bg-slate-900/50">
@@ -1951,9 +2009,8 @@ export default function AdminDashboard() {
           {/* BOOKINGS */}
           {activeTab === 'bookings' && (
             <div className="space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800/50 p-4 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
-                <div className="flex flex-1 gap-3">
-                  <div className="relative flex-1 max-w-sm">
+              <div className="flex flex-wrap gap-2 bg-white dark:bg-slate-800/50 p-3 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
+                <div className="relative flex-1 min-w-0">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input
                       type="text"
@@ -1962,11 +2019,11 @@ export default function AdminDashboard() {
                       value={search}
                       onChange={e => setSearch(e.target.value)}
                     />
-                  </div>
+                </div>
                   <select 
                     value={bookingFilter}
                     onChange={e => setBookingFilter(e.target.value)}
-                    className="px-3 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-white outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 transition-colors"
+                    className="px-3 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-white outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 transition-colors flex-shrink-0"
                   >
                     <option value="All">All Status</option>
                     <option value="CONFIRMED">Confirmed</option>
@@ -1975,13 +2032,42 @@ export default function AdminDashboard() {
                     <option value="COMPLETED">Completed</option>
                     <option value="CANCELLED">Cancelled</option>
                   </select>
-                </div>
-                <button onClick={fetchAllBookings} className="p-2 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 transition-colors shrink-0">
+                <button onClick={fetchAllBookings} className="p-2 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 transition-colors flex-shrink-0">
                   <RefreshCw className={`h-4 w-4 ${loadingBookings ? 'animate-spin' : ''}`} />
                 </button>
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
+              {/* ── Mobile Booking Cards ── */}
+              <div className="sm:hidden space-y-3">
+                {(() => {
+                  const filtered2 = allBookings.filter(b => {
+                    const ms = !search || b.employees?.name?.toLowerCase().includes(search.toLowerCase()) || b.routes?.route_name?.toLowerCase().includes(search.toLowerCase()) || b.destination?.toLowerCase().includes(search.toLowerCase());
+                    return ms && (bookingFilter === 'All' || b.status === bookingFilter);
+                  });
+                  if (loadingBookings) return <div className="py-8 text-center text-sm text-gray-500">Fetching bookings...</div>;
+                  if (filtered2.length === 0) return <div className="py-10 text-center"><ClipboardList className="h-8 w-8 text-gray-200 mx-auto mb-2" /><p className="text-sm text-gray-400">No bookings found.</p></div>;
+                  return filtered2.map(bk => (
+                    <div key={bk.id} className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-gray-100 dark:border-slate-700 shadow-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0">{bk.employees?.name?.[0] || 'E'}</div>
+                          <div className="min-w-0"><p className="text-sm font-bold text-gray-900 dark:text-white truncate">{bk.employees?.name}</p><p className="text-[10px] text-gray-400 truncate">{bk.employees?.department}</p></div>
+                        </div>
+                        <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${bk.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' : bk.status === 'ON ROUTE' ? 'bg-blue-100 text-blue-700' : bk.status === 'WAITLISTED' ? 'bg-orange-100 text-orange-700' : bk.status === 'COMPLETED' ? 'bg-gray-100 text-gray-600' : 'bg-red-100 text-red-700'}`}>{bk.status}</span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Date</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{new Date(bk.booking_date).toLocaleDateString()}</p></div>
+                        <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Route</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5 truncate">{bk.routes?.route_name || 'Direct'}</p></div>
+                        <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Destination</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5 truncate">{bk.destination}</p></div>
+                        <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Vehicle</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{bk.vehicles?.vehicle_number || '—'}</p></div>
+                      </div>
+                      <button onClick={() => handleOverrideBooking(bk.id, bk.status)} className="mt-3 w-full py-2 text-xs font-semibold text-red-600 bg-red-50 dark:bg-red-900/20 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-1"><AlertCircle className="h-3 w-3" />Override Status</button>
+                    </div>
+                  ));
+                })()}
+              </div>
+              {/* ── Desktop Table ── */}
+              <div className="hidden sm:block overflow-x-auto rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
                 <table className="min-w-full divide-y divide-gray-100 dark:divide-slate-700">
                   <thead>
                     <tr className="bg-gray-50 dark:bg-slate-900/50">
@@ -2147,7 +2233,37 @@ export default function AdminDashboard() {
           {/* EXTERNAL */}
           {activeTab === 'external' && (
             <div className="space-y-4">
-              <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
+              {/* ── Mobile External Cards ── */}
+              <div className="sm:hidden space-y-3">
+                {loadingExternal ? (
+                  <div className="py-8 text-center text-sm text-gray-500">Loading...</div>
+                ) : externalRequests.length === 0 ? (
+                  <div className="py-10 text-center"><AlertCircle className="h-8 w-8 text-gray-200 mx-auto mb-2" /><p className="text-sm text-gray-400">No external requests yet.</p></div>
+                ) : externalRequests.map(req => (
+                  <div key={req.id} className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-gray-100 dark:border-slate-700 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs flex-shrink-0">{req.employees?.name?.[0] || 'E'}</div>
+                        <div className="min-w-0"><p className="text-sm font-bold text-gray-900 dark:text-white truncate">{req.employees?.name}</p><p className="text-xs text-gray-400">{req.employees?.mobile}</p></div>
+                      </div>
+                      <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${req.status === 'APPROVED' ? 'bg-green-100 text-green-700' : req.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{req.status}</span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Type</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{req.vehicle_type}</p></div>
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Passengers</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{req.passenger_count}</p></div>
+                      <div className="col-span-2 bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Reason</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{req.reason}</p></div>
+                    </div>
+                    {req.status === 'PENDING' && (
+                      <div className="mt-3 flex gap-2">
+                        <button onClick={() => handleExternalAction(req.id, 'APPROVED', req.reason)} className="flex-1 py-2 bg-green-50 text-green-700 rounded-xl text-xs font-bold hover:bg-green-100 transition-colors">Approve</button>
+                        <button onClick={() => handleExternalAction(req.id, 'REJECTED', req.reason)} className="flex-1 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors">Reject</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* ── Desktop Table ── */}
+              <div className="hidden sm:block overflow-x-auto rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
                 <table className="min-w-full divide-y divide-gray-100 dark:divide-slate-700">
                   <thead>
                     <tr className="bg-gray-50 dark:bg-slate-900/50">
@@ -2221,19 +2337,35 @@ export default function AdminDashboard() {
            {/* ROUTES */}
           {activeTab === 'routes' && (
             <div className="space-y-4">
-              <div className="flex justify-between items-center bg-white dark:bg-slate-800/50 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-                <div className="flex space-x-3">
-                  <div className="relative">
+              <div className="flex gap-2 flex-wrap bg-white dark:bg-slate-800/50 p-3 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+                  <div className="relative flex-1 min-w-0">
                     <Search className="h-4 w-4 absolute left-3 top-2.5 text-gray-400" />
-                    <input type="text" placeholder="Search routes..." className="pl-9 pr-4 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-900 dark:text-white outline-none focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500 w-64 transition-colors" />
+                    <input type="text" placeholder="Search routes..." className="pl-9 pr-4 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-900 dark:text-white outline-none focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500 w-full transition-colors" />
                   </div>
                 </div>
-                <button onClick={() => setShowAddRoute(true)} className="flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
-                  <Plus className="h-4 w-4 mr-2" /> Add Route
-                </button>
-              </div>
 
-              <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
+              {/* ── Mobile Route Cards ── */}
+              <div className="sm:hidden space-y-3">
+                {Array.isArray(routes) && routes.length === 0 ? (
+                  <div className="py-10 text-center"><MapPin className="h-8 w-8 text-gray-200 mx-auto mb-2" /><p className="text-sm text-gray-400">No routes yet.</p></div>
+                ) : Array.isArray(routes) && routes.map((route, i) => (
+                  <div key={route.id || i} className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-gray-100 dark:border-slate-700 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0"><p className="text-sm font-bold text-gray-900 dark:text-white">{route.name}</p><p className="text-xs text-blue-600 mt-0.5 truncate">{route.vehicle}</p></div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button onClick={() => { setEditingRoute(route); setShowAddRoute(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-xl"><Edit2 className="h-4 w-4" /></button>
+                        <button onClick={() => handleDeleteRoute(route.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-xl"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Pickup</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5 truncate">{route.pickup}</p></div>
+                      <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Destination</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5 truncate">{route.destination}</p></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* ── Desktop Table ── */}
+              <div className="hidden sm:block overflow-x-auto rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
                 <table className="min-w-full divide-y divide-gray-100 dark:divide-slate-700">
                   <thead>
                     <tr className="bg-gray-50 dark:bg-slate-900/50">
