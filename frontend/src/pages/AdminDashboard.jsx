@@ -7,7 +7,7 @@ import {
   Upload, FileSpreadsheet, CheckCircle2, XCircle, Eye, Edit2, Trash2,
   MoreVertical, Search, Filter, Plus, RefreshCw, X, MapPin, ChevronRight,
   ChevronLeft, Calendar as CalendarIcon, Clock, ChevronDown, Download, Fuel,
-  AlertTriangle
+  AlertTriangle, Mail
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
@@ -925,6 +925,16 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error('Failed to approve booking', err);
       alert('Failed to approve booking.');
+    }
+  };
+
+  const handleResendNotification = async (id) => {
+    try {
+      const res = await axios.post(`${API}/bookings/${id}/resend-email`);
+      alert(res.data.message || 'Notification email resent successfully.');
+    } catch (err) {
+      console.error('Failed to resend notification', err);
+      alert(err.response?.data?.error || 'Failed to resend notification email.');
     }
   };
 
@@ -2079,18 +2089,19 @@ export default function AdminDashboard() {
                         <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Destination</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5 truncate">{bk.destination}</p></div>
                         <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Vehicle</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{bk.vehicles?.vehicle_number || '—'}</p></div>
                       </div>
-                      {bk.status === 'PENDING_APPROVAL' ? (
-                        <div className="mt-3 flex gap-2">
+                      <div className="mt-3 flex gap-2">
+                        {bk.status === 'PENDING_APPROVAL' && (
                           <button onClick={() => handleApproveBooking(bk.id)} className="flex-1 py-2 text-xs font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700 transition-colors flex items-center justify-center gap-1">
-                            <CheckCircle2 className="h-3 w-3" /> Approve Booking
+                            <CheckCircle2 className="h-3 w-3" /> Approve
                           </button>
-                          <button onClick={() => handleOverrideBooking(bk.id, bk.status)} className="px-3 py-2 text-xs font-semibold text-red-600 bg-red-50 dark:bg-red-900/20 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-1">
-                            Override
-                          </button>
-                        </div>
-                      ) : (
-                        <button onClick={() => handleOverrideBooking(bk.id, bk.status)} className="mt-3 w-full py-2 text-xs font-semibold text-red-600 bg-red-50 dark:bg-red-900/20 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-1"><AlertCircle className="h-3 w-3" />Override Status</button>
-                      )}
+                        )}
+                        <button onClick={() => handleResendNotification(bk.id)} className="flex-1 py-2 text-xs font-semibold text-blue-600 bg-blue-50 dark:bg-blue-900/20 rounded-xl hover:bg-blue-100 transition-colors flex items-center justify-center gap-1">
+                          <Mail className="h-3 w-3" /> Resend Mail
+                        </button>
+                        <button onClick={() => handleOverrideBooking(bk.id, bk.status)} className="px-3 py-2 text-xs font-semibold text-red-600 bg-red-50 dark:bg-red-900/20 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-1">
+                          Override
+                        </button>
+                      </div>
                     </div>
                   ));
                 })()}
@@ -2249,6 +2260,12 @@ export default function AdminDashboard() {
                                     <CheckCircle2 className="w-4 h-4 mr-2" /> Approve Booking
                                   </button>
                                 )}
+                                <button
+                                  onClick={() => handleResendNotification(bk.id)}
+                                  className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-400 text-sm font-semibold rounded-lg border border-blue-100 dark:border-blue-800 transition-colors flex items-center shadow-sm"
+                                >
+                                  <Mail className="w-4 h-4 mr-2" /> Resend Email
+                                </button>
                                 <button
                                   onClick={() => handleOverrideBooking(bk.id, bk.status)}
                                   className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 text-sm font-semibold rounded-lg border border-red-100 dark:border-red-800 transition-colors flex items-center"

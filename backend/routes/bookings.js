@@ -1028,6 +1028,55 @@ router.patch('/external/:id', async (req, res) => {
     console.error('[External Requests PATCH] Error:', error);
     res.status(500).json({ error: error.message });
   }
+// POST /bookings/:id/resend-email
+router.post('/:id/resend-email', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { data: booking, error: bErr } = await supabase
+      .from('bookings')
+      .select('*, employees(*), routes(*), vehicles(*)')
+      .eq('id', id)
+      .single();
+
+    if (bErr || !booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    const { sendEmail } = require('../utils/mailer');
+    const emp = booking.employees;
+    if (!emp || !emp.email) {
+      return res.status(400).json({ error: 'Employee email not found' });
+    }
+
+    const isWaitlisted = booking.status === 'WAITLISTED';
+    let subject, message;
+
+    if (isWaitlisted) {
+      const { data: wl } = await supabase
+        .from('waitlists')
+        .select('waitlist_position')
+        .eq('booking_id', id)
+        .single();
+      const position = wl ? wl.waitlist_position : 'N/A';
+
+      subject = `Waitlisted for ${booking.destination} on ${booking.booking_date} — Revexy Transport`;
+      message = `Hello ${emp.name},\n\nThis is a resend of your booking notification.\n\nAll vehicles are full for ${booking.destination} on ${booking.booking_date}. You are #${position} on the waitlist.\n\nWe will notify you automatically if a seat becomes available.\n\nRevexy Transport Team`;
+    } else {
+      const routeName = booking.routes ? booking.routes.route_name : 'Direct';
+      const vehicleName = booking.vehicles ? booking.vehicles.vehicle_name : 'N/A';
+      const vehicleNum = booking.vehicles ? booking.vehicles.vehicle_number : 'N/A';
+
+      subject = `Booking Confirmed for ${booking.destination} on ${booking.booking_date} — Revexy Transport`;
+      message = `Hello ${emp.name},\n\nThis is a resend of your booking notification.\n\nYour booking is confirmed!\nRoute: ${routeName}\nVehicle: ${vehicleName} (${vehicleNum})\nDate: ${booking.booking_date}\nDestination: ${booking.destination}\n\nPlease be at the pickup point on time.\n\nRevexy Transport Team`;
+    }
+
+    await sendEmail(emp.email, subject, message);
+
+    res.json({ success: true, message: 'Notification email resent successfully' });
+  } catch (error) {
+    console.error('[Resend Email] Error:', error);
+    res.status(500).json({ error: 'Failed to resend email: ' + error.message });
+  }
 });
 
 module.exports = router;
