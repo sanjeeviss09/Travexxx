@@ -564,6 +564,11 @@ export default function AdminDashboard() {
   const [expandedVehicle, setExpandedVehicle] = useState(null);
   const [expandedDriver, setExpandedDriver] = useState(null);
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+  };
   const [search, setSearch] = useState('');
   const [manifests, setManifests] = useState({}); // { [vehicleId]: { confirmed: [], waitlisted: [] } }
   const [loadingManifest, setLoadingManifest] = useState({});
@@ -892,7 +897,7 @@ export default function AdminDashboard() {
     if (!action) return;
     const newStatus = action.trim().toUpperCase();
     if (!['CONFIRMED', 'WAITLISTED', 'CANCELLED'].includes(newStatus)) {
-      alert('Invalid status. Override aborted.');
+      showToast('Invalid status. Override aborted.', 'warning');
       return;
     }
     
@@ -900,10 +905,11 @@ export default function AdminDashboard() {
       try {
         await axios.post(`${API}/bookings/${id}/cancel`);
         fetchAllBookings();
+        showToast('Booking status overridden to CANCELLED successfully!', 'success');
         return;
       } catch (err) {
         console.error('Failed to cancel booking', err);
-        alert('Failed to override booking status.');
+        showToast('Failed to override booking status.', 'error');
         return;
       }
     }
@@ -911,30 +917,31 @@ export default function AdminDashboard() {
     try {
       await axios.patch(`${API}/bookings/${id}`, { status: newStatus });
       fetchAllBookings();
+      showToast(`Booking status overridden to ${newStatus} successfully!`, 'success');
     } catch (err) {
       console.error('Failed to override booking', err);
-      alert('Failed to override booking status.');
+      showToast('Failed to override booking status.', 'error');
     }
   };
 
   const handleApproveBooking = async (id) => {
     try {
       await axios.patch(`${API}/bookings/${id}`, { status: 'CONFIRMED' });
-      // Show instant visual alert/feedback
       fetchAllBookings();
+      showToast('Booking approved successfully!', 'success');
     } catch (err) {
       console.error('Failed to approve booking', err);
-      alert('Failed to approve booking.');
+      showToast('Failed to approve booking.', 'error');
     }
   };
 
   const handleResendNotification = async (id) => {
     try {
       const res = await axios.post(`${API}/bookings/${id}/resend-email`);
-      alert(res.data.message || 'Notification email resent successfully.');
+      showToast(res.data.message || 'Notification email resent successfully.', 'success');
     } catch (err) {
       console.error('Failed to resend notification', err);
-      alert(err.response?.data?.error || 'Failed to resend notification email.');
+      showToast(err.response?.data?.error || 'Failed to resend notification email.', 'error');
     }
   };
 
@@ -2478,6 +2485,13 @@ export default function AdminDashboard() {
         title={confirmModal.title}
         message={confirmModal.message}
       />
+
+      <Toast 
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ ...toast, show: false })}
+      />
     </div>
   );
 }
@@ -2662,6 +2676,49 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Toast({ show, message, type, onClose }) {
+  React.useEffect(() => {
+    if (show) {
+      const timer = setTimeout(onClose, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [show, onClose]);
+
+  if (!show) return null;
+
+  const isSuccess = type === 'success';
+  const isError = type === 'error';
+  const isWarning = type === 'warning';
+
+  return (
+    <div className="fixed bottom-6 right-6 z-[200] flex items-center gap-3 bg-white/80 dark:bg-slate-900/90 backdrop-blur-xl border border-gray-200/50 dark:border-slate-700/50 px-5 py-4 rounded-2xl shadow-2xl shadow-blue-500/10 dark:shadow-none min-w-[320px] max-w-md animate-in slide-in-from-bottom-5 fade-in duration-300">
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+        isSuccess ? 'bg-green-50 text-green-600 dark:bg-green-950/30 dark:text-green-400' :
+        isError ? 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400' :
+        'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400'
+      }`}>
+        {isSuccess && <CheckCircle2 className="w-5 h-5 animate-bounce" />}
+        {isError && <XCircle className="w-5 h-5 animate-pulse" />}
+        {isWarning && <AlertTriangle className="w-5 h-5 animate-bounce" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">
+          {isSuccess ? 'Success' : isError ? 'Error' : 'Notification'}
+        </p>
+        <p className="text-sm font-semibold text-gray-800 dark:text-slate-200 mt-0.5 leading-snug">
+          {message}
+        </p>
+      </div>
+      <button 
+        onClick={onClose}
+        className="p-1 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors shrink-0"
+      >
+        <X className="w-4 h-4" />
+      </button>
     </div>
   );
 }
