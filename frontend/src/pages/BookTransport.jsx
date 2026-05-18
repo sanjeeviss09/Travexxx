@@ -3,7 +3,7 @@ import { Truck, Clock, MapPin, Calendar, CheckCircle, AlertCircle,
   ArrowRight, ArrowLeft, Car, Briefcase, Check, Navigation, Star, Home, Sunset } from 'lucide-react';
 import axios from 'axios';
 
-const API = window.location.origin.includes('5173') ? 'http://localhost:5000/api' : '/api';
+const API = window.location.origin.includes('5173') ? `http://${window.location.hostname}:5000/api` : '/api';
 
 /** Parse pickup_points which can be JSON array string or plain string */
 function formatPickup(raw) {
@@ -57,8 +57,19 @@ export default function BookTransport() {
     if (!formData.date) return;
     setRoutesLoading(true);
     axios.get(`${API}/bookings/smart-routes?date=${formData.date}`)
-      .then(r => setRoutes(r.data))
-      .catch(console.error)
+      .then(r => {
+        if (Array.isArray(r.data)) {
+          setRoutes(r.data);
+        } else {
+          setError('API returned invalid format (expected array)');
+          setRoutes([]);
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching routes:', err);
+        setError('Failed to fetch available routes from server.');
+        setRoutes([]);
+      })
       .finally(() => setRoutesLoading(false));
   }, [formData.date]);
 
