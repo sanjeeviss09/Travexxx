@@ -42,10 +42,50 @@ router.get('/', async (req, res) => {
 });
 
 
+const parseTime = (slot) => {
+  if (!slot) return { start: 0, end: 0 };
+  const [s, e] = slot.split('-').map(t => t.trim());
+  const toMinutes = (timeStr) => {
+    if (!timeStr) return 0;
+    const parts = timeStr.trim().split(' ');
+    if (parts.length < 1) return 0;
+    const [time, meridiem] = parts;
+    const timeParts = time.split(':');
+    let h = parseInt(timeParts[0]) || 0;
+    let m = parseInt(timeParts[1]) || 0;
+    if (meridiem === 'PM' && h !== 12) h += 12;
+    if (meridiem === 'AM' && h === 12) h = 0;
+    return h * 60 + m;
+  };
+  return { start: toMinutes(s), end: toMinutes(e) };
+};
+
+const isOverlapping = (slotA, slotB) => {
+  const a = parseTime(slotA);
+  const b = parseTime(slotB);
+  return Math.max(a.start, b.start) < Math.min(a.end, b.end);
+};
+
 // Create a route
 router.post('/', async (req, res) => {
   const { route_name, pickup_points, destination, estimated_time, branch_id, vehicle_id } = req.body;
   try {
+    if (vehicle_id && estimated_time) {
+      const { data: existingRoutes } = await supabase
+        .from('routes')
+        .select('id, route_name, estimated_time')
+        .eq('vehicle_id', vehicle_id);
+      
+      if (existingRoutes && existingRoutes.length > 0) {
+        const overlap = existingRoutes.find(r => isOverlapping(r.estimated_time, estimated_time));
+        if (overlap) {
+          return res.status(400).json({ 
+            error: `Scheduling Conflict: Vehicle is already assigned to route "${overlap.route_name}" during the overlapping slot: ${overlap.estimated_time}.` 
+          });
+        }
+      }
+    }
+
     const { data, error } = await supabase.from('routes').insert([{
       route_name,
       pickup_points: pickup_points || '[]',
@@ -68,6 +108,23 @@ router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const { route_name, pickup_points, destination, estimated_time, branch_id, vehicle_id } = req.body;
   try {
+    if (vehicle_id && estimated_time) {
+      const { data: existingRoutes } = await supabase
+        .from('routes')
+        .select('id, route_name, estimated_time')
+        .eq('vehicle_id', vehicle_id)
+        .neq('id', id);
+      
+      if (existingRoutes && existingRoutes.length > 0) {
+        const overlap = existingRoutes.find(r => isOverlapping(r.estimated_time, estimated_time));
+        if (overlap) {
+          return res.status(400).json({ 
+            error: `Scheduling Conflict: Vehicle is already assigned to route "${overlap.route_name}" during the overlapping slot: ${overlap.estimated_time}.` 
+          });
+        }
+      }
+    }
+
     const { data, error } = await supabase.from('routes').update({
       route_name,
       pickup_points: pickup_points || '[]',
