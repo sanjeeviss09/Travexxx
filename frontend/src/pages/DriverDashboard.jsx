@@ -162,6 +162,11 @@ function TripCard({ trip, onSelect }) {
         <div>
           <p className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-1">{trip.displayId}</p>
           <h3 className="font-bold text-gray-900 dark:text-white text-base">{trip.route}</h3>
+          {trip.bookingDate && (
+            <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">
+              📅 {new Date(trip.bookingDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </p>
+          )}
         </div>
         <StatusBadge status={trip.status} />
       </div>
@@ -385,10 +390,8 @@ export default function DriverDashboard() {
             setStuckTrip(null);
           }
           
-          // Always only show routes if passengers actually booked (for today and all other dates)
-          const routesToShow = myBackendRoutes.filter(r => 
-            dayBookings.some(b => b.route_id === r.id && ['CONFIRMED', 'ON ROUTE', 'COMPLETED'].includes(b.status))
-          );
+          // Show ALL assigned routes for this date — routes without bookings default to Upcoming
+          const routesToShow = myBackendRoutes;
 
           const mappedTrips = routesToShow.map(r => {
              let stops = ['Start Point', 'End Point'];

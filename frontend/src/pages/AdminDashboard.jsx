@@ -756,26 +756,32 @@ export default function AdminDashboard() {
       const d = new Date();
       d.setDate(d.getDate() + selectedDate);
       const dateStr = d.toISOString().split('T')[0];
+      // Always refresh stats and vehicles (overview counters)
+      fetchStats();
+      fetchVehicles(dateStr);
+      // Refresh tab-specific data
       if (activeTab === 'bookings') fetchAllBookings();
-      if (activeTab === 'overview' || activeTab === 'vehicles') {
-        fetchStats();
-        fetchVehicles(dateStr);
-      }
+      if (activeTab === 'employees') { /* employees are fetched on tab change */ }
     };
 
     const channel = supabase
-      .channel('admin_realtime')
+      .channel('admin_realtime_v2')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, fetchRelevantData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, fetchRelevantData)
-      .subscribe();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, fetchRelevantData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, fetchRelevantData)
+      .subscribe((status) => {
+        console.log('[Admin Realtime] channel status:', status);
+      });
 
-    const interval = setInterval(fetchRelevantData, 10000); // Also poll every 10s to ensure sync
+    const interval = setInterval(fetchRelevantData, 5000); // Poll every 5s as fallback
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(interval);
     };
   }, [activeTab, selectedDate]);
+
 
   const handleDeleteVehicle = (id) => {
     setConfirmModal({
