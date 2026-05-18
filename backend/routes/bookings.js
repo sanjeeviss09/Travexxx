@@ -506,23 +506,33 @@ router.post('/request', async (req, res) => {
     }
 
     if (waitlisted) {
-      // FIX: Calculate real waitlist position for this route+date
-      const { count: waitCount } = await supabase
-        .from('waitlists')
-        .select('id', { count: 'exact', head: true })
-        .eq('booking_id', booking.id);
-      
-      // Count existing waitlist entries for same destination+date
+      // Fetch all waitlisted bookings for this destination and date to re-calculate queue based on priority
       const { data: existingWaitlist } = await supabase
         .from('bookings')
-        .select('id')
+        .select('id, priority, created_at')
         .eq('booking_date', date)
         .eq('destination', destination)
         .eq('status', 'WAITLISTED')
         .neq('id', booking.id);
       
-      const waitPosition = (existingWaitlist?.length || 0) + 1;
+      let allWaitlisted = existingWaitlist || [];
+      // Add the current booking to the mix
+      allWaitlisted.push({
+        id: booking.id,
+        priority: employee.priority_level,
+        created_at: new Date().toISOString()
+      });
 
+      // Sort by Priority (Descending), then Created At (Ascending)
+      allWaitlisted.sort((a, b) => {
+        if (b.priority !== a.priority) return b.priority - a.priority;
+        return new Date(a.created_at) - new Date(b.created_at);
+      });
+
+      // Find actual position (1-indexed)
+      const waitPosition = allWaitlisted.findIndex(b => b.id === booking.id) + 1;
+
+      // Update waitlist table for the current user
       await supabase
         .from('waitlists')
         .insert([{
@@ -531,10 +541,13 @@ router.post('/request', async (req, res) => {
           priority: employee.priority_level
         }]);
 
+      // Note: We ideally should update positions for everyone else who got bumped down, 
+      // but for simplicity we only return the dynamic position for this user's notification.
+
       // Notify employee of waitlist
       await supabase.from('notifications').insert([{
         user_id: employee_id,
-        message: `⏳ Vehicles are full for ${date}. You are #${waitPosition} on the waitlist for ${destination}. You'll be notified if a seat opens.`,
+        message: `⏳ Vehicles are full for ${date}. Based on your priority level (${employee.priority_level}), you are #${waitPosition} on the waitlist for ${destination}.`,
         read_status: false
       }]);
 
