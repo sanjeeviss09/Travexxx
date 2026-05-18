@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: revexy-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: SUPABASE_URL
+        value: https://ucuuelohmkeesibevlfh.supabase.co
+      - key: SUPABASE_KEY
+        value: sb_publishable_MPhN2hbDLUB0r9ZQwCEO3w_BYNU0Jg4
+      - key: SUPABASE_SERVICE_KEY
+        placeholder: "Insert your Supabase Service Key here (from backend/.env)"
+      - key: JWT_SECRET
+        value: axxelent_super_secret_key_2026
+      - key: PORT
+        value: 5000
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USER
+        value: sanjeevinick08@gmail.com
+      - key: EMAIL_PASS
+        placeholder: "Insert your Gmail App Password here (from backend/.env)"
+      - key: EMAIL_FROM
+        value: "Axxelent Transport <sanjeevinick08@gmail.com>"
+      - key: TWILIO_ACCOUNT_SID
+        value: your_account_sid
+      - key: TWILIO_AUTH_TOKEN
+        value: your_auth_token
+      - key: TWILIO_PHONE_NUMBER
+        value: +1XXXXXXXXXX
