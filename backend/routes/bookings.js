@@ -16,6 +16,9 @@ router.get('/', async (req, res) => {
     if (employee_id) query = query.eq('employee_id', employee_id);
     if (vehicle_id) query = query.eq('vehicle_id', vehicle_id);
     if (date) query = query.eq('booking_date', date);
+    if (!vehicle_id && !employee_id) {
+      query = query.not('employee_id', 'is', null);
+    }
     const { data, error } = await query;
     if (error) throw error;
     res.json(data);
@@ -163,6 +166,63 @@ router.patch('/bulk-update', async (req, res) => {
       const { data: updateData, error } = await query;
       if (error) throw error;
       data = updateData || [];
+    }
+
+    // If NO bookings were updated, but the driver is starting, completing, or cancelling a trip,
+    // we should insert or update a "system booking" to persist this status!
+    if (data.length === 0 && vehicle_id) {
+      let destination = 'Unknown';
+      let pickup_point = '[SYSTEM] Trip Status';
+      if (actualRouteId) {
+        const { data: rt } = await supabase.from('routes').select('destination, pickup_points').eq('id', actualRouteId).single();
+        if (rt) {
+          destination = rt.destination;
+          try {
+            const pts = JSON.parse(rt.pickup_points);
+            pickup_point = pts[0] || '[SYSTEM] Trip Status';
+          } catch(e) {}
+        }
+      }
+
+      // Check if a system booking already exists for this route and date
+      const { data: existingSys } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('vehicle_id', vehicle_id)
+        .eq('booking_date', booking_date)
+        .eq('route_id', actualRouteId)
+        .is('employee_id', null)
+        .maybeSingle();
+
+      if (existingSys) {
+        // Update existing system booking status
+        const { data: updatedSys, error: sysErr } = await supabase
+          .from('bookings')
+          .update({ status: statusToSet })
+          .eq('id', existingSys.id)
+          .select();
+        if (!sysErr && updatedSys) {
+          data = updatedSys;
+        }
+      } else {
+        // Insert new system booking
+        const { data: newSys, error: sysErr } = await supabase
+          .from('bookings')
+          .insert([{
+            employee_id: null,
+            vehicle_id,
+            route_id: actualRouteId,
+            booking_date,
+            pickup_point,
+            destination,
+            status: statusToSet,
+            priority: 0
+          }])
+          .select();
+        if (!sysErr && newSys) {
+          data = newSys;
+        }
+      }
     }
 
     // Update vehicle status based on trip state
@@ -1028,6 +1088,8 @@ router.patch('/external/:id', async (req, res) => {
     console.error('[External Requests PATCH] Error:', error);
     res.status(500).json({ error: error.message });
   }
+});
+
 // POST /bookings/:id/resend-email
 router.post('/:id/resend-email', async (req, res) => {
   const { id } = req.params;
