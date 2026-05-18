@@ -917,6 +917,18 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleApproveBooking = async (id) => {
+    try {
+      await axios.patch(`${API}/bookings/${id}`, { status: 'CONFIRMED' });
+      // Show instant visual alert/feedback
+      fetchAllBookings();
+    } catch (err) {
+      console.error('Failed to approve booking', err);
+      alert('Failed to approve booking.');
+    }
+  };
+
+
   const handleUpdateVehicle = async (data) => {
 
     const payload = {
@@ -2067,7 +2079,18 @@ export default function AdminDashboard() {
                         <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Destination</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5 truncate">{bk.destination}</p></div>
                         <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Vehicle</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{bk.vehicles?.vehicle_number || '—'}</p></div>
                       </div>
-                      <button onClick={() => handleOverrideBooking(bk.id, bk.status)} className="mt-3 w-full py-2 text-xs font-semibold text-red-600 bg-red-50 dark:bg-red-900/20 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-1"><AlertCircle className="h-3 w-3" />Override Status</button>
+                      {bk.status === 'PENDING_APPROVAL' ? (
+                        <div className="mt-3 flex gap-2">
+                          <button onClick={() => handleApproveBooking(bk.id)} className="flex-1 py-2 text-xs font-semibold text-white bg-green-600 rounded-xl hover:bg-green-700 transition-colors flex items-center justify-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> Approve Booking
+                          </button>
+                          <button onClick={() => handleOverrideBooking(bk.id, bk.status)} className="px-3 py-2 text-xs font-semibold text-red-600 bg-red-50 dark:bg-red-900/20 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-1">
+                            Override
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => handleOverrideBooking(bk.id, bk.status)} className="mt-3 w-full py-2 text-xs font-semibold text-red-600 bg-red-50 dark:bg-red-900/20 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-1"><AlertCircle className="h-3 w-3" />Override Status</button>
+                      )}
                     </div>
                   ));
                 })()}
@@ -2217,7 +2240,15 @@ export default function AdminDashboard() {
                                   </div>
                                 </div>
                               </div>
-                              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700 flex justify-end">
+                              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700 flex justify-end gap-3">
+                                {bk.status === 'PENDING_APPROVAL' && (
+                                  <button
+                                    onClick={() => handleApproveBooking(bk.id)}
+                                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors flex items-center shadow-sm"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4 mr-2" /> Approve Booking
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => handleOverrideBooking(bk.id, bk.status)}
                                   className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 text-sm font-semibold rounded-lg border border-red-100 dark:border-red-800 transition-colors flex items-center"
