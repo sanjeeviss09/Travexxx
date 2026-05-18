@@ -2076,7 +2076,10 @@ export default function AdminDashboard() {
               <div className="sm:hidden space-y-3">
                 {(() => {
                   const filtered2 = allBookings.filter(b => {
-                    const ms = !search || b.employees?.name?.toLowerCase().includes(search.toLowerCase()) || b.routes?.route_name?.toLowerCase().includes(search.toLowerCase()) || b.destination?.toLowerCase().includes(search.toLowerCase());
+                    const ms = !search || 
+                      (b.employees?.name?.toLowerCase() || '').includes(search.toLowerCase()) || 
+                      (b.routes?.route_name?.toLowerCase() || '').includes(search.toLowerCase()) || 
+                      (b.destination?.toLowerCase() || '').includes(search.toLowerCase());
                     return ms && (bookingFilter === 'All' || b.status === bookingFilter);
                   });
                   if (loadingBookings) return <div className="py-8 text-center text-sm text-gray-500">Fetching bookings...</div>;
@@ -2131,10 +2134,10 @@ export default function AdminDashboard() {
                       <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500">Fetching bookings...</td></tr>
                     ) : allBookings.filter(b => {
                       const matchesSearch = !search || 
-                        b.employees?.name?.toLowerCase().includes(search.toLowerCase()) ||
-                        b.routes?.route_name?.toLowerCase().includes(search.toLowerCase()) ||
-                        b.destination?.toLowerCase().includes(search.toLowerCase()) ||
-                        b.pickup_point?.toLowerCase().includes(search.toLowerCase());
+                        (b.employees?.name?.toLowerCase() || '').includes(search.toLowerCase()) ||
+                        (b.routes?.route_name?.toLowerCase() || '').includes(search.toLowerCase()) ||
+                        (b.destination?.toLowerCase() || '').includes(search.toLowerCase()) ||
+                        (b.pickup_point?.toLowerCase() || '').includes(search.toLowerCase());
                       const matchesFilter = bookingFilter === 'All' || b.status === bookingFilter;
                       return matchesSearch && matchesFilter;
                     }).length === 0 ? (
@@ -2146,10 +2149,10 @@ export default function AdminDashboard() {
                       </tr>
                     ) : allBookings.filter(b => {
                       const matchesSearch = !search || 
-                        b.employees?.name?.toLowerCase().includes(search.toLowerCase()) ||
-                        b.routes?.route_name?.toLowerCase().includes(search.toLowerCase()) ||
-                        b.destination?.toLowerCase().includes(search.toLowerCase()) ||
-                        b.pickup_point?.toLowerCase().includes(search.toLowerCase());
+                        (b.employees?.name?.toLowerCase() || '').includes(search.toLowerCase()) ||
+                        (b.routes?.route_name?.toLowerCase() || '').includes(search.toLowerCase()) ||
+                        (b.destination?.toLowerCase() || '').includes(search.toLowerCase()) ||
+                        (b.pickup_point?.toLowerCase() || '').includes(search.toLowerCase());
                       const matchesFilter = bookingFilter === 'All' || b.status === bookingFilter;
                       return matchesSearch && matchesFilter;
                     }).map((bk) => (
