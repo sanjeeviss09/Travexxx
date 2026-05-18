@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Truck, Clock, MapPin, Calendar, CheckCircle, AlertCircle,
-  ArrowRight, ArrowLeft, Car, Briefcase, Check, Navigation, Star } from 'lucide-react';
+  ArrowRight, ArrowLeft, Car, Briefcase, Check, Navigation, Star, Home, Sunset } from 'lucide-react';
 import axios from 'axios';
 
 const API = window.location.origin.includes('5173') ? 'http://localhost:5000/api' : '/api';
@@ -17,38 +17,13 @@ function formatPickup(raw) {
   }
 }
 
-function parseTimeToMinutes(timeStr) {
-  if (!timeStr) return 0;
-  const [time, meridiem] = timeStr.trim().split(' ');
-  const [hStr, mStr] = time.split(':');
-  let h = parseInt(hStr) || 0;
-  let m = parseInt(mStr) || 0;
-  if (meridiem?.toUpperCase() === 'PM' && h !== 12) h += 12;
-  if (meridiem?.toUpperCase() === 'AM' && h === 12) h = 0;
-  return h * 60 + m;
-}
-
-function isSlotAvailableToday(slot) {
-  const startStr = slot.split('-')[0].trim();
-  const slotMins = parseTimeToMinutes(startStr);
-  const now = new Date();
-  return slotMins > now.getHours() * 60 + now.getMinutes() + 30;
-}
-
-const ALL_TIME_SLOTS = [
-  { label: '06:00 AM – 07:00 AM', value: '06:00 AM - 07:00 AM', period: 'Morning' },
-  { label: '07:30 AM – 08:30 AM', value: '07:30 AM - 08:30 AM', period: 'Morning' },
-  { label: '09:00 AM – 10:00 AM', value: '09:00 AM - 10:00 AM', period: 'Morning' },
-  { label: '05:00 PM – 06:00 PM', value: '05:00 PM - 06:00 PM', period: 'Evening' },
-  { label: '06:30 PM – 07:30 PM', value: '06:30 PM - 07:30 PM', period: 'Evening' },
-];
-
 const STEPS = [
   { num: 1, title: 'When', icon: Calendar },
   { num: 2, title: 'Route',  icon: MapPin },
   { num: 3, title: 'Type',  icon: Car },
   { num: 4, title: 'Confirm', icon: Check },
 ];
+
 
 export default function BookTransport() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -73,23 +48,34 @@ export default function BookTransport() {
   const [bookingResult, setBookingResult] = useState(null);
   const [error, setError] = useState(null);
   const [routes, setRoutes] = useState([]);
-
-  React.useEffect(() => {
-    axios.get(`${API}/routes`).then(r => setRoutes(r.data)).catch(console.error);
-  }, []);
+  const [routesLoading, setRoutesLoading] = useState(false);
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const availableSlots = useMemo(() => {
-    if (formData.date === todayStr)
-      return ALL_TIME_SLOTS.filter(s => isSlotAvailableToday(s.value));
-    return ALL_TIME_SLOTS;
+
+  // Fetch smart routes whenever date changes
+  useEffect(() => {
+    if (!formData.date) return;
+    setRoutesLoading(true);
+    axios.get(`${API}/bookings/smart-routes?date=${formData.date}`)
+      .then(r => setRoutes(r.data))
+      .catch(console.error)
+      .finally(() => setRoutesLoading(false));
   }, [formData.date]);
 
   const selectedRoute = routes.find(r => r.id === formData.route_id);
+  // Return routes = routes whose pickup starts at the selected outbound route's destination
+  const returnRoutes = useMemo(() => {
+    if (!selectedRoute) return routes;
+    return routes.filter(r =>
+      r.route_start_base?.toLowerCase().trim() === selectedRoute.destination?.toLowerCase().trim()
+    );
+  }, [selectedRoute, routes]);
+
+
 
   const nextStep = () => {
-    if (step === 1 && (!formData.date || !formData.timeSlot)) {
-      setError('Please select a date and time slot.'); return;
+    if (step === 1 && !formData.date) {
+      setError('Please select a date.'); return;
     }
     if (step === 2 && !formData.route_id) {
       setError('Please select a transport route.'); return;
@@ -97,8 +83,8 @@ export default function BookTransport() {
     if (step === 2 && formData.inBetween && !formData.requestedPickup) {
       setError('Please specify your pickup point.'); return;
     }
-    if (step === 2 && formData.tripType === 'round_trip' && formData.returnType === 'different_route' && (!formData.returnRouteId || !formData.returnTimeSlot)) {
-      setError('Please select a return route and time slot.'); return;
+    if (step === 2 && formData.tripType === 'round_trip' && formData.returnType === 'different_route' && !formData.returnRouteId) {
+      setError('Please select a return route.'); return;
     }
     if (step === 3 && formData.type === 'External' && !formData.reason) {
       setError('Please provide a reason for the special request.'); return;
@@ -120,7 +106,7 @@ export default function BookTransport() {
         employee_id: user.id,
         route_id: formData.route_id,
         date: formData.date,
-        timeSlot: formData.timeSlot,
+        timeSlot: selectedRoute?.estimated_time || formData.date,
         pickup: `${tripLabel}${formData.inBetween
           ? `[IN-BETWEEN] ${formData.requestedPickup}`
           : selectedRoute?.pickup_points}`,
@@ -252,12 +238,12 @@ export default function BookTransport() {
             </div>
           )}
 
-          {/* ── STEP 1: Date & Time ── */}
+          {/* ── STEP 1: Date ── */}
           {step === 1 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">When are you traveling?</h3>
-                <p className="text-sm text-gray-400 dark:text-slate-500">Choose your travel date and preferred time slot.</p>
+                <p className="text-sm text-gray-400 dark:text-slate-500">Choose your travel date. Available routes and their time slots will load automatically.</p>
               </div>
 
               {/* Date picker */}
@@ -269,49 +255,21 @@ export default function BookTransport() {
                     type="date"
                     min={todayStr}
                     value={formData.date}
-                    onChange={e => setFormData({ ...formData, date: e.target.value, timeSlot: '' })}
+                    onChange={e => setFormData({ ...formData, date: e.target.value, route_id: '', returnRouteId: '' })}
                     className="input-field pl-12"
                   />
                 </div>
               </div>
 
-              {/* Time slots */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">Time Slot</label>
-                {availableSlots.length === 0 ? (
-                  <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl text-center">
-                    <Clock className="h-6 w-6 text-amber-500 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">No slots available today</p>
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">All time slots have passed. Please choose a future date.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {availableSlots.map(slot => (
-                      <button key={slot.value} type="button"
-                        onClick={() => setFormData({ ...formData, timeSlot: slot.value })}
-                        className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl border-2 text-left transition-all ${
-                          formData.timeSlot === slot.value
-                            ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 shadow-md'
-                            : 'border-gray-100 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 bg-gray-50 dark:bg-slate-800/50'
-                        }`}>
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                          formData.timeSlot === slot.value ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-500'
-                        }`}>
-                          <Clock className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <p className={`text-sm font-bold ${formData.timeSlot === slot.value ? 'text-blue-700 dark:text-blue-300' : 'text-gray-800 dark:text-slate-200'}`}>
-                            {slot.label}
-                          </p>
-                          <p className="text-xs text-gray-400 dark:text-slate-500">{slot.period} slot</p>
-                        </div>
-                        {formData.timeSlot === slot.value && (
-                          <Check className="h-4 w-4 text-blue-600 dark:text-blue-400 ml-auto" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              {/* Info banner */}
+              <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-2xl">
+                <Navigation className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">Smart Route Matching</p>
+                  <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5 leading-relaxed">
+                    On the next step, we'll show you routes available from the vehicle's current base location for your chosen date — along with live seat availability and time slots.
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -325,7 +283,12 @@ export default function BookTransport() {
               </div>
 
               <div className="space-y-2.5">
-                {routes.length === 0 ? (
+                {routesLoading ? (
+                  <div className="py-8 text-center text-gray-400">
+                    <div className="h-6 w-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                    <p className="text-sm">Loading smart routes for {formData.date}…</p>
+                  </div>
+                ) : routes.length === 0 ? (
                   <div className="py-8 text-center text-gray-400">
                     <Navigation className="h-8 w-8 mx-auto mb-2 opacity-40" />
                     <p className="text-sm">No routes available</p>
@@ -333,37 +296,56 @@ export default function BookTransport() {
                 ) : routes.map(route => {
                   const isSelected = formData.route_id === route.id;
                   const pickup = formatPickup(route.pickup_points);
+                  const isMorning = route.slot_period === 'Morning';
+                  const seatsLeft = route.available_seats ?? route.vehicles?.capacity ?? '?';
+                  const seatsColor = seatsLeft === 0 ? 'text-red-500' : seatsLeft <= 2 ? 'text-amber-500' : 'text-green-600';
                   return (
                     <button key={route.id} type="button"
+                      disabled={seatsLeft === 0}
                       onClick={() => setFormData({ ...formData, route_id: route.id })}
                       className={`w-full text-left p-4 rounded-2xl border-2 transition-all ${
-                        isSelected
+                        seatsLeft === 0
+                          ? 'opacity-50 cursor-not-allowed border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/30'
+                          : isSelected
                           ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 shadow-md'
                           : 'border-gray-100 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-800 bg-white dark:bg-slate-800'
                       }`}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3 flex-1 min-w-0">
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                            isSelected ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'
+                            isSelected ? 'bg-blue-600 text-white' : isMorning ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600'
                           }`}>
-                            <Navigation className="h-4 w-4" />
+                            {isMorning ? <Clock className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className={`font-bold text-sm ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-white'}`}>
-                              {route.route_name}
-                            </p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className={`font-bold text-sm ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-white'}`}>
+                                {route.route_name}
+                              </p>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                                isMorning ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
+                              }`}>{route.slot_period}</span>
+                              {route.base_match === false && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">Vehicle relocating</span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1 mt-1.5 text-xs text-gray-500 dark:text-slate-400">
                               <MapPin className="h-3 w-3 flex-shrink-0" />
                               <span className="truncate">{pickup}</span>
                               <ArrowRight className="h-3 w-3 flex-shrink-0" />
                               <span className="font-medium text-gray-700 dark:text-slate-300 truncate">{route.destination}</span>
                             </div>
-                            {route.estimated_time && (
-                              <div className="flex items-center gap-1 mt-1 text-xs text-gray-400 dark:text-slate-500">
-                                <Clock className="h-3 w-3" />
-                                <span>{route.estimated_time}</span>
+                            <div className="flex items-center gap-3 mt-1.5">
+                              {route.estimated_time && (
+                                <div className="flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500">
+                                  <Clock className="h-3 w-3" />
+                                  <span className="font-semibold">{route.estimated_time}</span>
+                                </div>
+                              )}
+                              <div className={`flex items-center gap-1 text-xs font-semibold ${seatsColor}`}>
+                                <span>{seatsLeft === 0 ? 'Full' : `${seatsLeft} seat${seatsLeft !== 1 ? 's' : ''} left`}</span>
                               </div>
-                            )}
+                            </div>
                           </div>
                         </div>
                         {isSelected && (
@@ -439,34 +421,40 @@ export default function BookTransport() {
                       <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-slate-700 animate-in fade-in slide-in-from-top-2 duration-200">
                         <div>
                           <label className="block text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-2">Select Return Route</label>
-                          <select
-                            value={formData.returnRouteId}
-                            onChange={e => setFormData({ ...formData, returnRouteId: e.target.value })}
-                            className="input-field text-sm"
-                          >
-                            <option value="">-- Choose Return Route --</option>
-                            {routes.map(r => (
-                              <option key={r.id} value={r.id}>
-                                {r.route_name} Commute ({formatPickup(r.pickup_points)} → {r.destination})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-2">Select Return Time Slot</label>
-                          <select
-                            value={formData.returnTimeSlot}
-                            onChange={e => setFormData({ ...formData, returnTimeSlot: e.target.value })}
-                            className="input-field text-sm"
-                          >
-                            <option value="">-- Choose Return Time Slot --</option>
-                            {ALL_TIME_SLOTS.map(slot => (
-                              <option key={slot.value} value={slot.value}>
-                                {slot.label} ({slot.period})
-                              </option>
-                            ))}
-                          </select>
+                          {returnRoutes.length === 0 ? (
+                            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-700 dark:text-amber-300">
+                              ⚠️ No return routes found starting from <strong>{selectedRoute?.destination}</strong>. The vehicle needs to be at that location to operate a return route.
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {returnRoutes.map(r => {
+                                const isRSel = formData.returnRouteId === r.id;
+                                const rSeats = r.available_seats ?? '?';
+                                return (
+                                  <button key={r.id} type="button"
+                                    disabled={rSeats === 0}
+                                    onClick={() => setFormData({ ...formData, returnRouteId: r.id, returnTimeSlot: r.estimated_time })}
+                                    className={`w-full text-left p-3 rounded-xl border-2 transition-all ${
+                                      rSeats === 0 ? 'opacity-50 cursor-not-allowed border-gray-100 dark:border-slate-700' :
+                                      isRSel ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' :
+                                      'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900'
+                                    }`}>
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <p className="text-sm font-bold text-gray-900 dark:text-white">{r.route_name}</p>
+                                        <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">
+                                          {formatPickup(r.pickup_points)} → {r.destination} · <span className="font-semibold">{r.estimated_time}</span>
+                                        </p>
+                                      </div>
+                                      <span className={`text-xs font-bold ${ rSeats === 0 ? 'text-red-500' : rSeats <= 2 ? 'text-amber-500' : 'text-green-600' }`}>
+                                        {rSeats === 0 ? 'Full' : `${rSeats} left`}
+                                      </span>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

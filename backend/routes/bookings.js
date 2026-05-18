@@ -257,6 +257,136 @@ router.delete('/notifications/clear', async (req, res) => {
   }
 });
 
+/**
+ * GET /bookings/smart-routes?date=YYYY-MM-DD
+ *
+ * Returns all routes with enriched "smart" data:
+ *   - vehicle base location (inferred from last completed trip on that date)
+ *   - whether the route is reachable from the vehicle's current base
+ *   - seat availability count
+ *   - route direction (morning/evening) derived from the route's own estimated_time
+ *
+ * Logic:
+ *   1. For each route's assigned vehicle, look at completed/on-route bookings for that date
+ *      to calculate where the vehicle ends up after each trip.
+ *   2. The vehicle's "current base" is the destination of its most recently completed trip
+ *      (or the first pickup_point of its earliest route if no trips have happened yet).
+ *   3. A route is "available from base" if the vehicle's current base matches the route's
+ *      first pickup_point.
+ *   4. We classify the time slot as Morning (AM) or Evening (PM) from the estimated_time field.
+ */
+router.get('/smart-routes', async (req, res) => {
+  const { date } = req.query;
+  const targetDate = date || new Date().toISOString().split('T')[0];
+
+  try {
+    // Fetch all routes with their assigned vehicle
+    const { data: routes, error: rErr } = await supabase
+      .from('routes')
+      .select('*, vehicles(id, vehicle_name, vehicle_number, capacity, vehicle_status)')
+      .order('created_at', { ascending: true });
+    if (rErr) throw rErr;
+
+    // Fetch all relevant bookings for the date (confirmed or completed)
+    const { data: dayBookings, error: bErr } = await supabase
+      .from('bookings')
+      .select('id, vehicle_id, route_id, destination, status, created_at, routes(estimated_time, pickup_points, destination)')
+      .eq('booking_date', targetDate)
+      .in('status', ['CONFIRMED', 'ON ROUTE', 'COMPLETED']);
+    if (bErr) throw bErr;
+
+    // Group bookings by vehicle
+    const bookingsByVehicle = {};
+    (dayBookings || []).forEach(b => {
+      if (!bookingsByVehicle[b.vehicle_id]) bookingsByVehicle[b.vehicle_id] = [];
+      bookingsByVehicle[b.vehicle_id].push(b);
+    });
+
+    // For each vehicle, calculate base location
+    const vehicleBase = {};
+    for (const [vehicleId, bookings] of Object.entries(bookingsByVehicle)) {
+      // Sort bookings by time slot (parse estimated_time)
+      bookings.sort((a, b) => {
+        const getStart = (bk) => {
+          const slot = bk.routes?.estimated_time || '';
+          const startStr = slot.split('-')[0].trim();
+          if (!startStr) return 0;
+          const parts = startStr.split(' ');
+          const [time, meridiem] = parts;
+          const [h, m] = time.split(':').map(Number);
+          let hours = h || 0;
+          if (meridiem?.toUpperCase() === 'PM' && hours !== 12) hours += 12;
+          if (meridiem?.toUpperCase() === 'AM' && hours === 12) hours = 0;
+          return hours * 60 + (m || 0);
+        };
+        return getStart(a) - getStart(b);
+      });
+
+      // The base after all trips = destination of the last trip on that date
+      const lastBooking = bookings[bookings.length - 1];
+      vehicleBase[vehicleId] = lastBooking.destination || lastBooking.routes?.destination;
+    }
+
+    // For each route, calculate seat availability and base compatibility
+    const enriched = routes.map(route => {
+      const vehicle = route.vehicles;
+      if (!vehicle) return { ...route, available_seats: 0, base_match: false, slot_period: 'Unknown', vehicle_base: null };
+
+      // Parse pickup_points (JSON array or plain string)
+      let pickups = [];
+      try {
+        const parsed = JSON.parse(route.pickup_points);
+        pickups = Array.isArray(parsed) ? parsed : [String(parsed)];
+      } catch {
+        pickups = route.pickup_points ? [route.pickup_points] : [];
+      }
+      const routeStartBase = pickups[0] || route.destination; // first pickup = where vehicle needs to be
+
+      // Calculate current base for this vehicle
+      const currentBase = vehicleBase[vehicle.id] || routeStartBase; // default: vehicle is at its natural start base
+
+      // Check if the vehicle is currently AT the right location for this route
+      const baseMatch = currentBase.toLowerCase().trim() === routeStartBase.toLowerCase().trim();
+
+      // Count occupied seats on this specific route for this date
+      const routeBookings = (dayBookings || []).filter(b => b.route_id === route.id);
+      const occupiedSeats = routeBookings.length;
+      const availableSeats = Math.max(0, (vehicle.capacity || 0) - occupiedSeats);
+
+      // Determine time period from estimated_time
+      const slotStr = (route.estimated_time || '').toLowerCase();
+      const startStr = slotStr.split('-')[0].trim();
+      let slotPeriod = 'Flexible';
+      if (startStr.includes('pm') || (parseInt(startStr) >= 12 && !startStr.includes('am'))) {
+        slotPeriod = 'Evening';
+      } else if (startStr.includes('am')) {
+        slotPeriod = 'Morning';
+      } else {
+        // Fallback: check hour numerically
+        const hour = parseInt(startStr.split(':')[0]);
+        slotPeriod = hour < 12 ? 'Morning' : 'Evening';
+      }
+
+      return {
+        ...route,
+        available_seats: availableSeats,
+        occupied_seats: occupiedSeats,
+        base_match: baseMatch,
+        vehicle_base: currentBase,
+        route_start_base: routeStartBase,
+        slot_period: slotPeriod,
+      };
+    });
+
+    res.json(enriched);
+  } catch (error) {
+    console.error('[Smart Routes] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch smart routes', details: error.message });
+  }
+});
+
+
+
 // PATCH mark notification as read
 router.patch('/notifications/:id/read', async (req, res) => {
   const { id } = req.params;
