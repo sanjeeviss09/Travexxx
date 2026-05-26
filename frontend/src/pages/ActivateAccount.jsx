@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { CheckCircle2 } from 'lucide-react';
+import { API } from '../config/api.js';
 
 export default function ActivateAccount() {
   const [employeeId, setEmployeeId] = useState('');
@@ -22,7 +23,7 @@ export default function ActivateAccount() {
     setError('');
     
     try {
-      const activateUrl = window.location.origin.includes('5173') ? 'http://localhost:5000/api/auth/activate' : '/api/auth/activate';
+      const activateUrl = `${API}/auth/activate`;
       await axios.post(activateUrl, {
         employee_id: employeeId,
         password

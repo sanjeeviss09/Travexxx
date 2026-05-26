@@ -12,9 +12,42 @@ const supabase = require('./db');
 dotenv.config();
 const app = express();
 const server = http.createServer(app);
-// Express setup
-app.use(cors());
+
+// ── CORS configuration ──────────────────────────────────────────────────────
+// Allow web browsers, Electron desktop, and Capacitor Android/iOS origins
+const allowedOrigins = [
+  // Local development
+  'http://localhost:5173',
+  'http://localhost:4173',
+  'http://localhost:3000',
+  // Production web deployments
+  'https://revexy-backend.onrender.com',
+  'https://revexy.vercel.app',
+  // Capacitor Android / iOS (native WebView)
+  'capacitor://localhost',
+  'ionic://localhost',
+  'http://localhost',
+  // Electron (file:// protocol or custom scheme)
+  'file://',
+  'app://.',
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g., mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.some(o => origin.startsWith(o))) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS blocked: ${origin}`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
+
 app.use(express.json());
+
 
 // Basic health check
 app.get('/health', (req, res) => {
@@ -29,6 +62,8 @@ const vehicleRoutes = require('./routes/vehicles');
 const driverRoutes = require('./routes/drivers');
 const transportRoutes = require('./routes/routes');
 const analyticsRoutes = require('./routes/analytics');
+const aiRoutes = require('./routes/ai');
+const gatePassRoutes = require('./routes/gatePasses');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
@@ -37,6 +72,8 @@ app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/drivers', driverRoutes);
 app.use('/api/routes', transportRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/gate-passes', gatePassRoutes);
 
 const fs = require('fs');
 const path = require('path');

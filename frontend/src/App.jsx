@@ -9,6 +9,8 @@ import BookTransport from './pages/BookTransport';
 import ProfileSettings from './pages/ProfileSettings';
 import DriverLogin from './pages/DriverLogin';
 import DriverDashboard from './pages/DriverDashboard';
+import GatePass from './pages/GatePass';
+import AIAssistant from './components/AIAssistant';
 
 import { User, Camera, Moon, Sun, Monitor, Bell, Shield, Key, Save } from 'lucide-react';
 
@@ -53,6 +55,7 @@ function App() {
           <Route path="dashboard" element={<EmployeeDashboard />} />
           <Route path="book" element={<BookTransport />} />
           <Route path="my-bookings" element={<EmployeeDashboard />} />
+          <Route path="gate-pass" element={<GatePass />} />
           <Route path="settings" element={<ProfileSettings />} />
 
           {/* Admin routes */}
@@ -64,11 +67,13 @@ function App() {
           <Route path="admin/bookings" element={<AdminDashboard />} />
           <Route path="admin/external" element={<AdminDashboard />} />
           <Route path="admin/routes" element={<AdminDashboard />} />
+          <Route path="admin/gate-passes" element={<AdminDashboard />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
       </Router>
+      <AIAssistant />
     </ThemeProvider>
   );
 }

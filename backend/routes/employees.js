@@ -2,9 +2,11 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const xlsx = require('xlsx');
+const bcrypt = require('bcrypt');
 const supabase = require('../db');
 
 const upload = multer({ dest: 'uploads/' });
+const memoryUpload = multer({ storage: multer.memoryStorage() });
 
 // GET all employees (admin)
 router.get('/', async (req, res) => {
@@ -96,7 +98,7 @@ router.post('/import', upload.single('file'), async (req, res) => {
 
 // Admin: Manual add employee
 router.post('/manual', async (req, res) => {
-  const { employee_id, name, email, mobile, department, designation } = req.body;
+  const { employee_id, name, email, mobile, department, designation, role } = req.body;
   if (!employee_id || !name || !email) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
@@ -118,6 +120,7 @@ router.post('/manual', async (req, res) => {
         department: department || '',
         designation: designation || '',
         priority_level: priority,
+        role: role || 'EMPLOYEE',
         account_status: 'INACTIVE'
       }]);
 
@@ -132,7 +135,7 @@ router.post('/manual', async (req, res) => {
 // Admin: Update employee
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
-  const { employee_id, name, email, mobile, department, designation } = req.body;
+  const { employee_id, name, email, mobile, department, designation, role } = req.body;
 
   try {
     const priorityMap = {
@@ -150,6 +153,7 @@ router.put('/:id', async (req, res) => {
         mobile: String(mobile || ''),
         department: department || '',
         designation: designation || '',
+        role: role || 'EMPLOYEE',
         priority_level: priority
       })
       .eq('id', id);
@@ -176,6 +180,65 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error('Delete employee error:', err);
     res.status(500).json({ error: err.message || 'Failed to delete employee' });
+  }
+});
+
+// Admin: Reset employee password to default
+router.post('/:id/reset-password', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash('Revexy@123', salt);
+
+    const { error } = await supabase
+      .from('employees')
+      .update({ password_hash })
+      .eq('id', id);
+
+    if (error) throw error;
+    res.json({ message: 'Password reset to Revexy@123 successfully' });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ error: err.message || 'Failed to reset password' });
+  }
+});
+
+// Employee: Upload profile picture
+router.post('/:id/profile-pic', memoryUpload.single('file'), async (req, res) => {
+  const { id } = req.params;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  try {
+    const fileExt = req.file.originalname.split('.').pop();
+    const fileName = `${id}-${Date.now()}.${fileExt}`;
+    const filePath = `avatars/${fileName}`;
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: true
+      });
+
+    if (uploadError) throw uploadError;
+
+    const { data: publicUrlData } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(filePath);
+      
+    const publicUrl = publicUrlData.publicUrl;
+
+    const { error: updateError } = await supabase
+      .from('employees')
+      .update({ profile_pic: publicUrl })
+      .eq('id', id);
+
+    if (updateError) throw updateError;
+
+    res.json({ message: 'Profile picture updated', profile_pic: publicUrl });
+  } catch (err) {
+    console.error('Profile pic upload error:', err);
+    res.status(500).json({ error: 'Failed to upload profile picture' });
   }
 });
 

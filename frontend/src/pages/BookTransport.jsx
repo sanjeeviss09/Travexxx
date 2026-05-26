@@ -25,11 +25,18 @@ const STEPS = [
 ];
 
 
+const getLocalDateString = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 export default function BookTransport() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalDateString(new Date()),
     timeSlot: '',
     route_id: '',
     pickup: '',
@@ -43,6 +50,7 @@ export default function BookTransport() {
     type: 'Regular',
     reason: '',
   });
+  // Gate Pass states removed (handled in standalone page)
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [bookingResult, setBookingResult] = useState(null);
@@ -50,7 +58,7 @@ export default function BookTransport() {
   const [routes, setRoutes] = useState([]);
   const [routesLoading, setRoutesLoading] = useState(false);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateString(new Date());
 
   // Fetch smart routes whenever date changes
   useEffect(() => {
@@ -97,8 +105,8 @@ export default function BookTransport() {
     if (step === 2 && formData.tripType === 'round_trip' && formData.returnType === 'different_route' && !formData.returnRouteId) {
       setError('Please select a return route.'); return;
     }
-    if (step === 3 && formData.type === 'External' && !formData.reason) {
-      setError('Please provide a reason for the special request.'); return;
+    if (step === 3 && !formData.reason) {
+      setError('Please provide a reason for the booking.'); return;
     }
     setError(null);
     setStep(p => p + 1);
@@ -198,7 +206,7 @@ export default function BookTransport() {
 
   /* ── MAIN FORM ── */
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl 3xl:max-w-3xl mx-auto">
       <div className="card overflow-hidden">
 
         {/* ── Header ── */}
@@ -209,7 +217,7 @@ export default function BookTransport() {
             </div>
             <div>
               <h2 className="text-lg font-bold">Book Transport</h2>
-              <p className="text-blue-100/70 text-xs">Step {step} of 4 — {STEPS[step-1].title}</p>
+              <p className="text-blue-100/70 text-xs">Step {step} of {STEPS.length} — {STEPS[step-1]?.title}</p>
             </div>
           </div>
 
@@ -530,16 +538,14 @@ export default function BookTransport() {
                 })}
               </div>
 
-              {formData.type === 'External' && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-200">
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">Reason for Special Request</label>
-                  <textarea rows={3} placeholder="Explain why you need a special vehicle..."
-                    value={formData.reason}
-                    onChange={e => setFormData({ ...formData, reason: e.target.value })}
-                    className="input-field resize-none"
-                  />
-                </div>
-              )}
+              <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">Reason for Booking</label>
+                <textarea rows={3} placeholder="Explain why you need this transport..."
+                  value={formData.reason}
+                  onChange={e => setFormData({ ...formData, reason: e.target.value })}
+                  className="input-field resize-none"
+                />
+              </div>
             </div>
           )}
 
@@ -573,8 +579,8 @@ export default function BookTransport() {
                 ))}
               </div>
 
-              {formData.type === 'External' && formData.reason && (
-                <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-900/50 rounded-2xl">
+              {formData.reason && (
+                <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-900/50 rounded-2xl">
                   <p className="text-xs font-bold text-purple-500 uppercase tracking-wide mb-1">Reason</p>
                   <p className="text-sm text-gray-700 dark:text-slate-300">{formData.reason}</p>
                 </div>
@@ -598,7 +604,7 @@ export default function BookTransport() {
               </button>
             ) : <div />}
 
-            {step < 4 ? (
+            {step < STEPS.length ? (
               <button type="button" onClick={nextStep}
                 className="btn-primary text-sm">
                 Next <ArrowRight className="h-4 w-4" />

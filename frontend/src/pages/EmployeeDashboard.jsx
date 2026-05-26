@@ -2,13 +2,140 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../supabase';
+import { API } from '../config/api.js';
 import { 
   Car, Clock, Calendar as CalendarIcon, MapPin, CheckCircle, 
   AlertCircle, Users, Activity, X, Star, ThumbsUp, ThumbsDown,
   CheckCircle2, AlertTriangle, Bell, Info
 } from 'lucide-react';
 
-const API = window.location.origin.includes('5173') ? 'http://localhost:5000/api' : '/api';
+
+
+// Timezone-safe date helper functions
+const parseDateString = (dateStr) => {
+  if (!dateStr) return new Date();
+  const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const parsePickupPoint = (text) => {
+  if (!text) return { location: '—', isRoundTrip: false, isSameVehicle: false, isOutbound: false, isReturn: false, isInBetween: false };
+  
+  let cleanText = text;
+  
+  const isRoundTrip = /\[ROUND TRIP\]/i.test(cleanText);
+  const isSameVehicle = /\(Same Vehicle\)/i.test(cleanText) || /\(Same Cab\)/i.test(cleanText);
+  const isOutbound = /\(Outbound\)/i.test(cleanText);
+  const isReturn = /\(Return\)/i.test(cleanText);
+  const isInBetween = /\[IN-BETWEEN\]/i.test(cleanText);
+  
+  // Clean all tag prefixes
+  cleanText = cleanText
+    .replace(/\[ROUND TRIP\]/gi, '')
+    .replace(/\(Same Vehicle\)/gi, '')
+    .replace(/\(Same Cab\)/gi, '')
+    .replace(/\(Outbound\)/gi, '')
+    .replace(/\(Return\)/gi, '')
+    .replace(/\[IN-BETWEEN\]/gi, '')
+    .trim();
+    
+  // If it's a JSON array or has quotes
+  try {
+    if (cleanText.startsWith('[') || cleanText.startsWith('"')) {
+      const parsed = JSON.parse(cleanText);
+      if (Array.isArray(parsed)) {
+        cleanText = parsed.join(' → ');
+      } else {
+        cleanText = String(parsed);
+      }
+    }
+  } catch (e) {
+    // Keep it but remove quotes/brackets manually if parse fails
+    cleanText = cleanText
+      .replace(/\\"/g, '')
+      .replace(/"/g, '')
+      .replace(/\[/g, '')
+      .replace(/\]/g, '');
+  }
+
+  // Final trim and cleanup
+  cleanText = cleanText
+    .replace(/\\"/g, '')
+    .replace(/"/g, '')
+    .replace(/^\[/, '')
+    .replace(/\]$/, '')
+    .trim();
+    
+  return {
+    location: cleanText || '—',
+    isRoundTrip,
+    isSameVehicle,
+    isOutbound,
+    isReturn,
+    isInBetween
+  };
+};
+
+const renderPickupPoint = (text, compact = false) => {
+  const { location, isRoundTrip, isSameVehicle, isOutbound, isReturn, isInBetween } = parsePickupPoint(text);
+  
+  if (compact) {
+    return (
+      <span className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300">
+        <span className="flex items-center gap-0.5">
+          {isRoundTrip && <span title="Round Trip" className="text-xs">🔄</span>}
+          {isSameVehicle && <span title="Same Cab" className="text-xs">🚗</span>}
+          {isOutbound && <span title="Outbound" className="text-[9px] px-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-bold uppercase tracking-wider">OUT</span>}
+          {isReturn && <span title="Return" className="text-[9px] px-1 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 font-bold uppercase tracking-wider">RET</span>}
+          {isInBetween && <span title="In-Between" className="text-xs">📍</span>}
+        </span>
+        <span className="font-semibold text-xs truncate max-w-[120px]">{location}</span>
+      </span>
+    );
+  }
+  
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <div className="flex flex-wrap gap-1 justify-start max-w-[200px]">
+        {isRoundTrip && (
+          <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 font-bold text-[9px] uppercase tracking-wider flex items-center gap-0.5 border border-blue-100 dark:border-blue-800">
+            🔄 Round Trip
+          </span>
+        )}
+        {isSameVehicle && (
+          <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 font-bold text-[9px] uppercase tracking-wider flex items-center gap-0.5 border border-indigo-100 dark:border-indigo-800">
+            🚗 Same Cab
+          </span>
+        )}
+        {isOutbound && (
+          <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 font-bold text-[9px] uppercase tracking-wider flex items-center gap-0.5 border border-sky-100 dark:border-sky-800">
+            Outbound
+          </span>
+        )}
+        {isReturn && (
+          <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 font-bold text-[9px] uppercase tracking-wider flex items-center gap-0.5 border border-purple-100 dark:border-purple-800">
+            Return
+          </span>
+        )}
+        {isInBetween && (
+          <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 font-bold text-[9px] uppercase tracking-wider flex items-center gap-0.5 border border-amber-100 dark:border-amber-800">
+            📍 In-Between
+          </span>
+        )}
+      </div>
+      <span className="font-semibold text-gray-700 dark:text-gray-200 text-xs text-left truncate max-w-[180px]" title={location}>
+        {location}
+      </span>
+    </div>
+  );
+};
+
+const getLocalDateString = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 export default function EmployeeDashboard() {
   const location = useLocation();
@@ -27,7 +154,7 @@ export default function EmployeeDashboard() {
       try {
         const targetDate = new Date();
         targetDate.setDate(targetDate.getDate() + selectedDate);
-        const dateStr = targetDate.toISOString().split('T')[0];
+        const dateStr = getLocalDateString(targetDate);
 
         // Fetch routes for selected date and drivers always
         const [routesRes, driversRes] = await Promise.all([
@@ -85,7 +212,7 @@ export default function EmployeeDashboard() {
 
         // Map real bookings
         const mappedBookings = sortedBookings.map(bk => {
-          const bkDate = new Date(bk.booking_date);
+          const bkDate = parseDateString(bk.booking_date);
           const today = new Date(); today.setHours(0,0,0,0);
           const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
           const bkDay = new Date(bkDate); bkDay.setHours(0,0,0,0);
@@ -102,7 +229,7 @@ export default function EmployeeDashboard() {
           else if (bk.status?.startsWith('CANCELLED')) displayStatus = bk.status.replace('CANCELLED', 'Cancelled');
 
           const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
-          const bkDayCheck = new Date(bk.booking_date); bkDayCheck.setHours(0,0,0,0);
+          const bkDayCheck = parseDateString(bk.booking_date); bkDayCheck.setHours(0,0,0,0);
           const isPast = bkDayCheck.getTime() < todayMidnight.getTime();
 
           let finalTime = bk.vehicles?.estimated_time || bk.routes?.estimated_time;
@@ -133,7 +260,7 @@ export default function EmployeeDashboard() {
             status: displayStatus,
             vehicle: bk.vehicles ? bk.vehicles.vehicle_number : 'Pending',
             seat: bk.seat_number || calculatedSeat,
-            pickup: bk.pickup_point?.replace(/^\[.*?\]\s*/, ''), // Remove the encoded time from display
+            pickup: bk.pickup_point,
             driverId: driversRes.data.find(d => d.assigned_vehicle === bk.vehicle_id)?.id || null,
             driverName: driversRes.data.find(d => d.assigned_vehicle === bk.vehicle_id)?.name || 'Unassigned',
             needsFeedback: bk.status === 'COMPLETED' && !bk.feedback_given,
@@ -175,7 +302,7 @@ export default function EmployeeDashboard() {
   const filteredBookings = upcomingBookings.filter(bk => {
     const d = new Date();
     d.setDate(d.getDate() + selectedDate);
-    const targetDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const targetDateStr = getLocalDateString(d);
     // Some databases return Date types with time attached, extract just the YYYY-MM-DD part
     const bkDate = bk.rawDate ? bk.rawDate.split('T')[0] : '';
     return bkDate === targetDateStr;
@@ -208,15 +335,15 @@ export default function EmployeeDashboard() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       
       {!isMyBookings && (
         <>
           {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-blue-700 dark:to-indigo-900 rounded-2xl p-6 text-white shadow-md flex items-center justify-between">
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-blue-700 dark:to-indigo-900 rounded-2xl p-4 sm:p-6 3xl:p-8 text-white shadow-md flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold mb-1">Welcome back, {user.name}!</h1>
-          <p className="text-blue-100 opacity-90">Here is the transport status for today.</p>
+          <h1 className="text-xl sm:text-2xl 3xl:text-3xl font-bold mb-1">Welcome back, {user.name}!</h1>
+          <p className="text-blue-100 opacity-90 text-sm 3xl:text-base">Here is the transport status for today.</p>
         </div>
         {unreadCount > 0 && (
           <div className="flex-shrink-0 bg-white/20 backdrop-blur-sm rounded-2xl px-4 py-3 text-center">
@@ -286,7 +413,7 @@ export default function EmployeeDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 3xl:grid-cols-4 gap-4 sm:gap-6">
         
         {/* Left Column: Calendar & Today's Vehicles */}
         <div className="lg:col-span-2 space-y-6">
@@ -363,7 +490,7 @@ export default function EmployeeDashboard() {
                 const isSelected = selectedDate === i;
                 const hasBooking = upcomingBookings.some(b => {
                    const bkDateStr = b.rawDate ? b.rawDate.split('T')[0] : '';
-                   const currDateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                   const currDateStr = getLocalDateString(date);
                    return bkDateStr === currDateStr;
                 });
                 return (
@@ -450,8 +577,12 @@ export default function EmployeeDashboard() {
         {/* Right Column: Mini Profile & Settings Teaser */}
         <div className="space-y-6">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6 text-center transition-colors">
-            <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold shadow-md relative group">
-              {user.name?.[0] || 'A'}
+            <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-blue-500/20 overflow-hidden shrink-0">
+              {user?.profile_pic ? (
+                <img src={user.profile_pic} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                user?.name?.[0] || 'A'
+              )}
             </div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mt-4">{user.name}</h3>
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-4">{user.designation} • {user.department}</p>
@@ -482,7 +613,7 @@ export default function EmployeeDashboard() {
                     <div className="flex items-center gap-4">
                       <div className="w-14 h-14 rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-gray-100 dark:border-slate-700 flex flex-col items-center justify-center flex-shrink-0">
                         <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">{bk.dateLabel}</span>
-                        <span className="text-lg font-extrabold text-blue-600 dark:text-blue-400">{new Date(bk.rawDate).getDate()}</span>
+                        <span className="text-lg font-extrabold text-blue-600 dark:text-blue-400">{parseDateString(bk.rawDate).getDate()}</span>
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-white text-base flex items-center mb-1">
@@ -492,6 +623,7 @@ export default function EmployeeDashboard() {
                           <span className="flex items-center"><Clock className="h-3.5 w-3.5 mr-1" /> {bk.time}</span>
                           <span className="flex items-center"><Car className="h-3.5 w-3.5 mr-1" /> {bk.vehicle}</span>
                           <span className="flex items-center"><Users className="h-3.5 w-3.5 mr-1" /> Seat: <strong className="ml-1 text-gray-700 dark:text-slate-300">{bk.seat}</strong></span>
+                          <span className="flex items-center gap-1">{renderPickupPoint(bk.pickup, true)}</span>
                         </div>
                       </div>
                     </div>
@@ -501,7 +633,7 @@ export default function EmployeeDashboard() {
                         bk.status === 'Confirmed' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                         : bk.status === 'Completed' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
                         : bk.status === 'On Route' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400'
-                        : bk.status === 'Cancelled' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                        : bk.status?.includes('Cancelled') ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                         : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
                       }`}>
                         {bk.status === 'Waitlisted' && bk.waitlist_pos ? `Waitlist #${bk.waitlist_pos}` : bk.status}

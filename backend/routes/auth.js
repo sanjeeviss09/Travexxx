@@ -107,4 +107,36 @@ router.post('/driver-login', async (req, res) => {
   }
 });
 
+// Forgot Password (Reset to default)
+router.post('/forgot-password', async (req, res) => {
+  const { employee_id } = req.body;
+  try {
+    const { data: employee, error } = await supabase
+      .from('employees')
+      .select('*')
+      .eq('employee_id', employee_id)
+      .single();
+
+    if (error || !employee) {
+      return res.status(400).json({ error: 'Employee not found' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash('Revexy@123', salt);
+
+    const { error: updateError } = await supabase
+      .from('employees')
+      .update({ password_hash })
+      .eq('employee_id', employee_id);
+
+    if (updateError) {
+      return res.status(500).json({ error: 'Failed to reset password' });
+    }
+
+    res.status(200).json({ message: 'Password has been reset to default: Revexy@123' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;

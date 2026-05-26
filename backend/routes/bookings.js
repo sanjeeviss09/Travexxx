@@ -685,7 +685,8 @@ router.post('/request', async (req, res) => {
         pickup_point: finalPickup,
         destination: destination || (allocatedRoute ? allocatedRoute.destination : ''),
         status: bookingStatus,
-        priority: employee.priority_level
+        priority: employee.priority_level,
+        reason: reason || null
       }])
       .select()
       .single();
@@ -784,7 +785,8 @@ router.post('/request', async (req, res) => {
       message: 'Seat allocated successfully!', 
       status: 'CONFIRMED', 
       vehicle: allocatedVehicle,
-      route: allocatedRoute
+      route: allocatedRoute,
+      booking_id: booking.id
     });
 
   } catch (error) {

@@ -2,13 +2,13 @@ import React from 'react';
 import { Outlet, Navigate, useNavigate, Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { supabase } from '../supabase';
+import { API } from '../config/api.js';
 import {
   LayoutDashboard, LogOut, Truck, Settings, Users,
   Bell, Car, MapPin, ClipboardList, AlertCircle, ChevronRight,
-  X, CheckCheck, Menu
+  X, CheckCheck, Menu, Box
 } from 'lucide-react';
 
-const API = window.location.origin.includes('5173') ? 'http://localhost:5000/api' : '/api';
 
 export default function DashboardLayout() {
   const token = localStorage.getItem('token');
@@ -115,6 +115,7 @@ export default function DashboardLayout() {
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Book Transport', path: '/book', icon: Truck },
     { name: 'My Bookings', path: '/my-bookings', icon: ClipboardList },
+    { name: 'Gate Pass', path: '/gate-pass', icon: Box },
     { name: 'Settings', path: '/settings', icon: Settings },
   ];
   const adminNav = [
@@ -124,6 +125,7 @@ export default function DashboardLayout() {
     { name: 'Drivers', path: '/admin/drivers', icon: Truck },
     { name: 'Bookings', path: '/admin/bookings', icon: ClipboardList },
     { name: 'Ext. Requests', path: '/admin/external', icon: AlertCircle },
+    { name: 'Goods on Travel', path: '/admin/gate-passes', icon: Box },
     { name: 'Routes', path: '/admin/routes', icon: MapPin },
     { name: 'Settings', path: '/settings', icon: Settings },
   ];
@@ -172,10 +174,14 @@ export default function DashboardLayout() {
             ? 'bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800/50'
             : 'bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50'
         }`}>
-          <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black text-white shadow-sm ${
+          <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black text-white shadow-sm overflow-hidden ${
             isAdmin ? 'bg-gradient-to-br from-violet-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-indigo-600'
           }`}>
-            {user.name?.[0] || 'A'}
+            {user?.profile_pic ? (
+              <img src={user.profile_pic} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              user?.name?.[0] || 'A'
+            )}
           </div>
           <div className="min-w-0">
             <p className="text-[11px] font-bold text-gray-900 dark:text-white truncate">{user.name}</p>
@@ -220,7 +226,7 @@ export default function DashboardLayout() {
     <div className="min-h-screen flex bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
 
       {/* ── Desktop Sidebar ── */}
-      <aside className="hidden lg:flex flex-col flex-shrink-0 bg-white dark:bg-slate-800/90 shadow-sm border-r border-gray-100 dark:border-slate-700/60 transition-colors duration-300" style={{ width: 260, minHeight: '100vh' }}>
+      <aside className="hidden lg:flex flex-col flex-shrink-0 bg-white dark:bg-slate-800/90 shadow-sm border-r border-gray-100 dark:border-slate-700/60 transition-colors duration-300" style={{ width: 'var(--sidebar-w, 260px)', minHeight: '100vh' }}>
         <SidebarContent />
       </aside>
 
@@ -245,7 +251,7 @@ export default function DashboardLayout() {
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* ── Topbar ── */}
-        <header className="bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 shadow-sm px-4 lg:px-8 py-3 lg:py-4 flex justify-between items-center sticky top-0 z-20 transition-colors duration-300">
+        <header className="bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 shadow-sm px-4 lg:px-8 3xl:px-12 py-3 lg:py-4 flex justify-between items-center sticky top-0 z-20 transition-colors duration-300">
           <div className="flex items-center gap-3">
             {/* Mobile hamburger */}
             <button
@@ -255,8 +261,8 @@ export default function DashboardLayout() {
               <Menu className="h-5 w-5" />
             </button>
             <div>
-              <h2 className="text-base lg:text-lg font-bold text-gray-900 dark:text-white leading-tight">{currentTitle}</h2>
-              <p className="text-[11px] text-gray-400 dark:text-slate-400 hidden sm:block">
+              <h2 className="text-base lg:text-lg 3xl:text-xl font-bold text-gray-900 dark:text-white leading-tight">{currentTitle}</h2>
+              <p className="text-[11px] 3xl:text-xs text-gray-400 dark:text-slate-400 hidden sm:block">
                 {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
             </div>
@@ -342,7 +348,7 @@ export default function DashboardLayout() {
         </header>
 
         {/* ── Page Content ── */}
-        <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8 overflow-auto relative">
+        <main className="flex-1 p-4 sm:p-5 lg:p-8 3xl:p-12 pb-24 lg:pb-8 overflow-auto relative">
           {/* Real-time Toast */}
           {toast && (
             <div className="fixed top-20 left-4 right-4 sm:left-auto sm:right-6 sm:w-80 z-[100] toast-enter">

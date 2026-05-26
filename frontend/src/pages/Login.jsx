@@ -2,13 +2,16 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Truck, Eye, EyeOff, ArrowRight, Shield } from 'lucide-react';
+import { API } from '../config/api.js';
 
 export default function Login() {
   const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -16,16 +19,41 @@ export default function Login() {
     setLoading(true);
     setError('');
     try {
-      const loginUrl = window.location.origin.includes('5173') ? 'http://localhost:5000/api/auth/login' : '/api/auth/login';
+      const loginUrl = `${API}/auth/login`;
       const res = await axios.post(loginUrl, {
         employee_id: employeeId,
         password
       });
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
-      navigate('/dashboard');
+      if (res.data.user?.role === 'ADMIN') {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid credentials. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      const res = await axios.post(`${API}/auth/forgot-password`, {
+        employee_id: employeeId
+      });
+      setSuccessMsg(res.data.message);
+      setTimeout(() => {
+        setIsForgotPassword(false);
+        setSuccessMsg('');
+      }, 5000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to reset password.');
     } finally {
       setLoading(false);
     }
@@ -104,8 +132,12 @@ export default function Login() {
           {/* Card */}
           <div className="bg-white/[0.07] backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl">
             <div className="mb-8">
-              <h2 className="text-2xl font-black text-white mb-1">Welcome back</h2>
-              <p className="text-blue-200/60 text-sm">Sign in to your employee account</p>
+              <h2 className="text-2xl font-black text-white mb-1">
+                {isForgotPassword ? 'Reset Password' : 'Welcome back'}
+              </h2>
+              <p className="text-blue-200/60 text-sm">
+                {isForgotPassword ? 'Enter your Employee ID to reset your password' : 'Sign in to your employee account'}
+              </p>
             </div>
 
             {error && (
@@ -115,7 +147,15 @@ export default function Login() {
               </div>
             )}
 
-            <form onSubmit={handleLogin} className="space-y-5">
+            {successMsg && (
+              <div className="mb-6 flex items-start gap-3 bg-green-500/10 border border-green-400/20 text-green-300 px-4 py-3.5 rounded-2xl text-sm">
+                <span className="text-lg leading-none">✅</span>
+                <span className="leading-relaxed">{successMsg}</span>
+              </div>
+            )}
+
+            {!isForgotPassword ? (
+              <form onSubmit={handleLogin} className="space-y-5">
               {/* Employee ID */}
               <div>
                 <label className="block text-sm font-semibold text-blue-100/80 mb-2">Employee ID</label>
@@ -160,7 +200,47 @@ export default function Login() {
                   <>Sign In <ArrowRight className="h-4 w-4" /></>
                 )}
               </button>
+              
+              <div className="text-center mt-2">
+                <button type="button" onClick={() => { setIsForgotPassword(true); setError(''); setSuccessMsg(''); }} className="text-blue-300 hover:text-blue-200 text-sm font-medium transition-colors">
+                  Forgot Password?
+                </button>
+              </div>
             </form>
+            ) : (
+              <form onSubmit={handleForgotPassword} className="space-y-5">
+                {/* Employee ID */}
+                <div>
+                  <label className="block text-sm font-semibold text-blue-100/80 mb-2">Employee ID</label>
+                  <input
+                    type="text"
+                    required
+                    value={employeeId}
+                    onChange={e => setEmployeeId(e.target.value)}
+                    placeholder="e.g. AXX-001"
+                    className="w-full bg-white/[0.06] border border-white/10 text-white placeholder-blue-300/30 rounded-2xl px-4 py-3.5 text-sm font-medium focus:outline-none focus:border-blue-400/50 focus:bg-white/[0.1] focus:ring-2 focus:ring-blue-400/20 transition-all"
+                  />
+                </div>
+
+                <button type="submit" disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-2xl shadow-lg shadow-blue-600/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed mt-2">
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Resetting...
+                    </span>
+                  ) : (
+                    <>Reset Password <ArrowRight className="h-4 w-4" /></>
+                  )}
+                </button>
+                
+                <div className="text-center mt-2">
+                  <button type="button" onClick={() => { setIsForgotPassword(false); setError(''); setSuccessMsg(''); }} className="text-blue-300 hover:text-blue-200 text-sm font-medium transition-colors">
+                    Back to Login
+                  </button>
+                </div>
+              </form>
+            )}
 
             {/* Footer links */}
             <div className="mt-8 pt-6 border-t border-white/10 space-y-3">
@@ -170,11 +250,18 @@ export default function Login() {
                   Activate your account
                 </Link>
               </p>
-              <Link to="/driver-login"
-                className="flex items-center justify-center gap-2.5 w-full py-3 bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-blue-200 font-semibold rounded-2xl text-sm transition-all">
-                <Truck className="h-4 w-4" />
-                Driver Portal Login
-              </Link>
+              <div className="flex gap-3">
+                <Link to="/driver-login"
+                  className="flex-1 flex items-center justify-center gap-2.5 py-3 bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-blue-200 font-semibold rounded-2xl text-sm transition-all">
+                  <Truck className="h-4 w-4" />
+                  Driver Portal
+                </Link>
+                <a href="/Revexy-Desktop-Setup.exe" download
+                  className="flex-1 flex items-center justify-center gap-2.5 py-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-400/20 text-blue-200 font-semibold rounded-2xl text-sm transition-all">
+                  <span className="text-lg leading-none">💻</span>
+                  Download App
+                </a>
+              </div>
             </div>
           </div>
 

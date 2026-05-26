@@ -19,6 +19,23 @@ export default {
           700: '#1d4ed8',
           900: '#1e3a8a',
         }
+      },
+      screens: {
+        'xs': '420px',
+        'sm': '640px',
+        'md': '768px',
+        'lg': '1024px',
+        'xl': '1280px',
+        '2xl': '1536px',
+        '3xl': '1920px',   // TV / large monitors
+        '4xl': '2560px',   // 4K TVs
+      },
+      spacing: {
+        '18': '4.5rem',
+        '22': '5.5rem',
+      },
+      fontSize: {
+        'xxs': ['0.625rem', { lineHeight: '0.875rem' }],
       }
     },
   },

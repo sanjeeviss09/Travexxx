@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Revexy Travel Desk</string>
+    <string name="title_activity_main">Revexy Travel Desk</string>
+    <string name="package_name">com.revexy.traveldesk</string>
+    <string name="custom_url_scheme">com.revexy.traveldesk</string>
+</resources>

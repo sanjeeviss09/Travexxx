@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Truck, Eye, EyeOff, Shield, ArrowRight } from 'lucide-react';
+import { API } from '../config/api.js';
 
 export default function DriverLogin() {
   const navigate = useNavigate();
@@ -16,7 +17,7 @@ export default function DriverLogin() {
     setLoading(true);
     setError('');
     try {
-      const loginUrl = window.location.origin.includes('5173') ? 'http://localhost:5000/api/auth/driver-login' : '/api/auth/driver-login';
+      const loginUrl = `${API}/auth/driver-login`;
       const res = await axios.post(loginUrl, { 
         driver_id: driverId, 
         pin_hash: pin 

@@ -11,8 +11,119 @@ import {
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
+import { API } from '../config/api.js';
 
-const API = window.location.origin.includes('5173') ? 'http://localhost:5000/api' : '/api';
+const parsePickupPoint = (text) => {
+  if (!text) return { location: '—', isRoundTrip: false, isSameVehicle: false, isOutbound: false, isReturn: false, isInBetween: false };
+  
+  let cleanText = text;
+  
+  const isRoundTrip = /\[ROUND TRIP\]/i.test(cleanText);
+  const isSameVehicle = /\(Same Vehicle\)/i.test(cleanText) || /\(Same Cab\)/i.test(cleanText);
+  const isOutbound = /\(Outbound\)/i.test(cleanText);
+  const isReturn = /\(Return\)/i.test(cleanText);
+  const isInBetween = /\[IN-BETWEEN\]/i.test(cleanText);
+  
+  // Clean all tag prefixes
+  cleanText = cleanText
+    .replace(/\[ROUND TRIP\]/gi, '')
+    .replace(/\(Same Vehicle\)/gi, '')
+    .replace(/\(Same Cab\)/gi, '')
+    .replace(/\(Outbound\)/gi, '')
+    .replace(/\(Return\)/gi, '')
+    .replace(/\[IN-BETWEEN\]/gi, '')
+    .trim();
+    
+  // If it's a JSON array or has quotes
+  try {
+    if (cleanText.startsWith('[') || cleanText.startsWith('"')) {
+      const parsed = JSON.parse(cleanText);
+      if (Array.isArray(parsed)) {
+        cleanText = parsed.join(' → ');
+      } else {
+        cleanText = String(parsed);
+      }
+    }
+  } catch (e) {
+    // Keep it but remove quotes/brackets manually if parse fails
+    cleanText = cleanText
+      .replace(/\\"/g, '')
+      .replace(/"/g, '')
+      .replace(/\[/g, '')
+      .replace(/\]/g, '');
+  }
+
+  // Final trim and cleanup
+  cleanText = cleanText
+    .replace(/\\"/g, '')
+    .replace(/"/g, '')
+    .replace(/^\[/, '')
+    .replace(/\]$/, '')
+    .trim();
+    
+  return {
+    location: cleanText || '—',
+    isRoundTrip,
+    isSameVehicle,
+    isOutbound,
+    isReturn,
+    isInBetween
+  };
+};
+
+const renderPickupPoint = (text, compact = false) => {
+  const { location, isRoundTrip, isSameVehicle, isOutbound, isReturn, isInBetween } = parsePickupPoint(text);
+  
+  if (compact) {
+    return (
+      <span className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300">
+        <span className="flex items-center gap-0.5">
+          {isRoundTrip && <span title="Round Trip" className="text-xs">🔄</span>}
+          {isSameVehicle && <span title="Same Cab" className="text-xs">🚗</span>}
+          {isOutbound && <span title="Outbound" className="text-[9px] px-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-bold uppercase tracking-wider">OUT</span>}
+          {isReturn && <span title="Return" className="text-[9px] px-1 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 font-bold uppercase tracking-wider">RET</span>}
+          {isInBetween && <span title="In-Between" className="text-xs">📍</span>}
+        </span>
+        <span className="font-semibold text-xs truncate max-w-[120px]">{location}</span>
+      </span>
+    );
+  }
+  
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex flex-wrap gap-1 justify-end max-w-[200px]">
+        {isRoundTrip && (
+          <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 font-bold text-[9px] uppercase tracking-wider flex items-center gap-0.5 border border-blue-100 dark:border-blue-800">
+            🔄 Round Trip
+          </span>
+        )}
+        {isSameVehicle && (
+          <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 font-bold text-[9px] uppercase tracking-wider flex items-center gap-0.5 border border-indigo-100 dark:border-indigo-800">
+            🚗 Same Cab
+          </span>
+        )}
+        {isOutbound && (
+          <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 font-bold text-[9px] uppercase tracking-wider flex items-center gap-0.5 border border-sky-100 dark:border-sky-800">
+            Outbound
+          </span>
+        )}
+        {isReturn && (
+          <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 font-bold text-[9px] uppercase tracking-wider flex items-center gap-0.5 border border-purple-100 dark:border-purple-800">
+            Return
+          </span>
+        )}
+        {isInBetween && (
+          <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 font-bold text-[9px] uppercase tracking-wider flex items-center gap-0.5 border border-amber-100 dark:border-amber-800">
+            📍 In-Between
+          </span>
+        )}
+      </div>
+      <span className="font-semibold text-gray-700 dark:text-gray-200 text-xs text-right truncate max-w-[180px]" title={location}>
+        {location}
+      </span>
+    </div>
+  );
+};
 
 function StatCard({ title, value, sub, icon: Icon, color, onClick }) {
   const colors = {
@@ -25,16 +136,16 @@ function StatCard({ title, value, sub, icon: Icon, color, onClick }) {
   return (
     <div 
       onClick={onClick}
-      className={`bg-white dark:bg-slate-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md transition-all duration-300 ${onClick ? 'cursor-pointer active:scale-95' : ''}`}
+      className={`bg-white dark:bg-slate-800 rounded-xl p-4 sm:p-5 3xl:p-7 shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md transition-all duration-300 ${onClick ? 'cursor-pointer active:scale-95' : ''}`}
     >
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-500 dark:text-slate-400">{title}</p>
-          <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{value}</p>
-          {sub && <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">{sub}</p>}
+          <p className="text-xs sm:text-sm 3xl:text-base font-medium text-gray-500 dark:text-slate-400">{title}</p>
+          <p className="text-2xl sm:text-3xl 3xl:text-4xl font-bold text-gray-900 dark:text-white mt-1">{value}</p>
+          {sub && <p className="text-xs 3xl:text-sm text-gray-400 dark:text-slate-500 mt-1">{sub}</p>}
         </div>
-        <div className={`p-3 rounded-xl ${colors[color] || colors.blue}`}>
-          <Icon className="h-5 w-5" />
+        <div className={`p-2 sm:p-3 rounded-xl ${colors[color] || colors.blue}`}>
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5 3xl:h-6 3xl:w-6" />
         </div>
       </div>
     </div>
@@ -335,6 +446,7 @@ function AddEmployeeModal({ onClose, onSuccess, editData }) {
     mobile: '',
     department: '',
     designation: '',
+    role: 'EMPLOYEE'
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -422,14 +534,27 @@ function AddEmployeeModal({ onClose, onSuccess, editData }) {
               />
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Designation</label>
-            <input 
-              type="text" 
-              className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
-              value={formData.designation}
-              onChange={e => setFormData({...formData, designation: e.target.value})}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Designation</label>
+              <input 
+                type="text" 
+                className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                value={formData.designation}
+                onChange={e => setFormData({...formData, designation: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Role</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                value={formData.role}
+                onChange={e => setFormData({...formData, role: e.target.value})}
+              >
+                <option value="EMPLOYEE">Employee</option>
+                <option value="ADMIN">Admin</option>
+              </select>
+            </div>
           </div>
           <button 
             type="submit" 
@@ -563,7 +688,7 @@ export default function AdminDashboard() {
   const [editingRoute, setEditingRoute] = useState(null);
   const [expandedVehicle, setExpandedVehicle] = useState(null);
   const [expandedDriver, setExpandedDriver] = useState(null);
-  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
+  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, confirmText: '', type: 'danger' });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   const showToast = (message, type = 'success') => {
@@ -589,6 +714,8 @@ export default function AdminDashboard() {
   
   const [externalRequests, setExternalRequests] = useState([]);
   const [loadingExternal, setLoadingExternal] = useState(false);
+  const [gatePasses, setGatePasses] = useState([]);
+  const [loadingGatePasses, setLoadingGatePasses] = useState(false);
 
   const handleDownloadTemplate = () => {
     const data = [
@@ -722,7 +849,7 @@ export default function AdminDashboard() {
       fetchStats(); // Update pending counts
     } catch (error) {
       console.error('Action failed', error);
-      alert('Failed to process request');
+      showToast('Failed to process request', 'error');
     }
   };
 
@@ -765,7 +892,7 @@ export default function AdminDashboard() {
       fetchStats();
       fetchVehicles(dateStr);
       // Refresh tab-specific data
-      if (activeTab === 'bookings') fetchAllBookings();
+      if (activeTab === 'bookings') fetchAllBookings(true);
       if (activeTab === 'employees') { /* employees are fetched on tab change */ }
     };
 
@@ -798,7 +925,27 @@ export default function AdminDashboard() {
           await axios.delete(`${API}/vehicles/${id}`);
           fetchVehicles();
         } catch (error) {
-          console.error(error);
+          console.error('Failed to delete vehicle', error);
+          showToast('Failed to delete vehicle', 'error');
+        }
+      }
+    });
+  };
+
+  const handleResetPassword = (id) => {
+    setConfirmModal({
+      show: true,
+      title: 'Reset Password',
+      message: "Are you sure you want to reset this employee's password to the default? This will revert their password to their initial credentials.",
+      confirmText: 'Reset Password',
+      type: 'warning',
+      onConfirm: async () => {
+        try {
+          const res = await axios.post(`${API}/employees/${id}/reset-password`);
+          showToast(res.data.message || 'Password reset successfully', 'success');
+        } catch (error) {
+          console.error('Failed to reset password', error);
+          showToast(error.response?.data?.error || 'Failed to reset password', 'error');
         }
       }
     });
@@ -859,7 +1006,7 @@ export default function AdminDashboard() {
       route_name: data.name,
       pickup_points: JSON.stringify([data.pickup]), // Simply store array string for now
       destination: data.destination,
-      estimated_time: data.time,
+      estimated_time: data.time || (data.destination === 'Sri City' ? '06:00 AM - 07:00 AM' : '05:00 PM - 06:00 PM'),
       vehicle_id: data.vehicle_id || null
     };
     try {
@@ -1031,7 +1178,7 @@ export default function AdminDashboard() {
       setEditingCredentials(null);
     } catch (error) {
       console.error('Failed to update credentials', error);
-      alert('Failed to update credentials. The Driver ID might already be in use.');
+      showToast('Failed to update credentials. Driver ID might already be in use.', 'error');
     }
   };
 
@@ -1067,16 +1214,16 @@ export default function AdminDashboard() {
     }
   };
 
-  const fetchAllBookings = async () => {
-    setLoadingBookings(true);
+  const fetchAllBookings = async (isSilent = false) => {
+    if (isSilent !== true) setLoadingBookings(true);
     try {
-      const res = await axios.get(`${API}/bookings`);
+      const res = await axios.get(`${API}/bookings`, { headers: { Authorization: `Bearer ${token}` } });
       setAllBookings(res.data || []);
     } catch (error) {
       console.error('Failed to fetch all bookings', error);
       setAllBookings([]);
     } finally {
-      setLoadingBookings(false);
+      if (isSilent !== true) setLoadingBookings(false);
     }
   };
 
@@ -1090,6 +1237,18 @@ export default function AdminDashboard() {
       console.error('Failed to fetch analytics', error);
     } finally {
       setLoadingAnalytics(false);
+    }
+  };
+
+  const fetchGatePasses = async () => {
+    setLoadingGatePasses(true);
+    try {
+      const res = await axios.get(`${API}/gate-passes`);
+      setGatePasses(res.data || []);
+    } catch (error) {
+      console.error('Failed to fetch gate passes', error);
+    } finally {
+      setLoadingGatePasses(false);
     }
   };
 
@@ -1109,7 +1268,7 @@ export default function AdminDashboard() {
     }
     if (activeTab === 'bookings') {
       fetchAllBookings();
-      const bInterval = setInterval(fetchAllBookings, 30000);
+      const bInterval = setInterval(() => fetchAllBookings(true), 60000);
       return () => {
         clearInterval(interval);
         clearInterval(bInterval);
@@ -1117,10 +1276,18 @@ export default function AdminDashboard() {
     }
     if (activeTab === 'external') {
       fetchExternalRequests();
-      const eInterval = setInterval(fetchExternalRequests, 30000);
+      const eInterval = setInterval(fetchExternalRequests, 60000);
       return () => {
         clearInterval(interval);
         clearInterval(eInterval);
+      };
+    }
+    if (activeTab === 'gate-passes') {
+      fetchGatePasses();
+      const gpInterval = setInterval(fetchGatePasses, 60000);
+      return () => {
+        clearInterval(interval);
+        clearInterval(gpInterval);
       };
     }
     
@@ -1141,11 +1308,12 @@ export default function AdminDashboard() {
     { id: 'drivers', label: 'Drivers' },
     { id: 'bookings', label: 'Bookings' },
     { id: 'external', label: 'External Requests' },
+    { id: 'gate-passes', label: 'Goods on Travel' },
     { id: 'routes', label: 'Routes' },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {showImport && (
         <ImportModal
           onClose={() => setShowImport(false)}
@@ -1186,7 +1354,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 xl:grid-cols-4 3xl:grid-cols-4 gap-3 sm:gap-4 3xl:gap-6">
         <StatCard title="Total Employees" value={loadingEmployees ? '...' : stats.totalEmployees} sub="Across all branches" icon={Users} color="blue" onClick={() => handleTabChange('employees')} />
         <StatCard title="Active Vehicles" value={stats.totalVehicles} sub="Fleet status" icon={Car} color="green" onClick={() => handleTabChange('vehicles')} />
         <StatCard title="Waitlisted" value={stats.waitlistedToday} sub="Pending allocation" icon={AlertCircle} color="yellow" onClick={() => handleTabChange('bookings')} />
@@ -1230,15 +1398,15 @@ export default function AdminDashboard() {
             </button>
           </div>
         )}
-        {(activeTab === 'vehicles' || activeTab === 'drivers') && (
+        {(activeTab === 'vehicles' || activeTab === 'drivers' || activeTab === 'routes') && (
           <div className="px-4 py-3 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-100 dark:border-slate-700">
-            <button onClick={() => activeTab === 'vehicles' ? setShowAddVehicle(true) : setShowAddDriver(true)} className="flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
-              <Plus className="h-4 w-4 mr-2" />Add {activeTab === 'vehicles' ? 'Vehicle' : 'Driver'}
+            <button onClick={() => activeTab === 'vehicles' ? setShowAddVehicle(true) : activeTab === 'drivers' ? setShowAddDriver(true) : setShowAddRoute(true)} className="flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
+              <Plus className="h-4 w-4 mr-2" />Add {activeTab === 'vehicles' ? 'Vehicle' : activeTab === 'drivers' ? 'Driver' : 'Route'}
             </button>
           </div>
         )}
 
-        <div className="p-4 lg:p-6">
+        <div className="p-3 sm:p-4 lg:p-6 3xl:p-8">
           {/* OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
@@ -1265,7 +1433,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 3xl:grid-cols-2 gap-4 lg:gap-6">
                 <div className="border border-gray-100 dark:border-slate-700 rounded-xl p-5">
                   <h3 className="font-semibold text-gray-800 dark:text-slate-100 mb-4 flex items-center"><Car className="h-4 w-4 mr-2 text-blue-500" />Fleet Status</h3>
                   <div className="space-y-3">
@@ -1576,6 +1744,7 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div className="flex gap-1">
+                        <button title="Reset Password" onClick={() => handleResetPassword(emp.id)} className="p-2 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 rounded-xl transition-colors"><AlertCircle className="h-4 w-4" /></button>
                         <button onClick={() => { setEditingEmployee(emp); setShowAddEmployee(true); }} className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-colors"><Edit2 className="h-4 w-4" /></button>
                         <button onClick={() => handleDeleteEmployee(emp.id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-colors"><Trash2 className="h-4 w-4" /></button>
                       </div>
@@ -1621,7 +1790,11 @@ export default function AdminDashboard() {
                         <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-300">{emp.department}</td>
                         <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-300">{emp.designation}</td>
                         <td className="px-4 py-3"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${emp.account_status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>{emp.account_status === 'ACTIVE' ? '● Active' : '○ Inactive'}</span></td>
-                        <td className="px-4 py-3 text-right"><div className="flex justify-end space-x-2"><button onClick={() => { setEditingEmployee(emp); setShowAddEmployee(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"><Edit2 className="h-4 w-4" /></button><button onClick={() => handleDeleteEmployee(emp.id)} className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"><Trash2 className="h-4 w-4" /></button><button className="p-1.5 text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-lg transition-colors"><Eye className="h-4 w-4" /></button></div></td>
+                        <td className="px-4 py-3 text-right"><div className="flex justify-end space-x-2">
+                          <button title="Reset Password" onClick={() => handleResetPassword(emp.id)} className="p-1.5 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 rounded-lg transition-colors"><AlertCircle className="h-4 w-4" /></button>
+                          <button title="Edit" onClick={() => { setEditingEmployee(emp); setShowAddEmployee(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"><Edit2 className="h-4 w-4" /></button>
+                          <button title="Delete" onClick={() => handleDeleteEmployee(emp.id)} className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"><Trash2 className="h-4 w-4" /></button>
+                        </div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1662,7 +1835,7 @@ export default function AdminDashboard() {
                         {!manifests[v.id] && !loadingManifest[v.id] && <button onClick={() => fetchManifest(v.id)} className="w-full py-2 text-xs text-gray-400 border border-dashed rounded-lg">Tap to load passenger list</button>}
                         {manifests[v.id] && (<>
                           <p className="text-[10px] font-bold text-green-600 uppercase">✓ Confirmed ({manifests[v.id]?.confirmed?.length || 0})</p>
-                          {manifests[v.id]?.confirmed?.map(b => (<div key={b.id} className="flex justify-between text-xs bg-green-50 dark:bg-green-900/10 rounded-lg px-2.5 py-1.5"><span className="font-medium">{b.employees?.name}</span><span className="text-gray-400">{b.pickup_point}</span></div>))}
+                          {manifests[v.id]?.confirmed?.map(b => (<div key={b.id} className="flex justify-between text-xs bg-green-50 dark:bg-green-900/10 rounded-lg px-2.5 py-1.5"><span className="font-medium">{b.employees?.name}</span>{renderPickupPoint(b.pickup_point, true)}</div>))}
                           <p className="text-[10px] font-bold text-orange-600 uppercase mt-2">⏳ Waitlisted ({manifests[v.id]?.waitlisted?.length || 0})</p>
                           {manifests[v.id]?.waitlisted?.map(b => (<div key={b.id} className="flex justify-between text-xs bg-orange-50 dark:bg-orange-900/10 rounded-lg px-2.5 py-1.5"><span className="font-medium">{b.employees?.name}</span><span className="text-orange-500">#{b.waitlist_position}</span></div>))}
                         </>)}
@@ -1785,9 +1958,9 @@ export default function AdminDashboard() {
                                           <p className="font-bold text-gray-900 dark:text-white">{b.employees?.name}</p>
                                           <p className="text-gray-500">{b.employees?.department}</p>
                                         </div>
-                                        <div className="text-right text-gray-400">
-                                          <p>{b.pickup_point}</p>
-                                          <p className="font-medium text-blue-500">Pri: {b.priority}</p>
+                                        <div className="text-right flex flex-col items-end gap-1 text-gray-400">
+                                          {renderPickupPoint(b.pickup_point, false)}
+                                          <p className="font-semibold text-blue-600 dark:text-blue-400 mt-0.5">Pri: {b.priority}</p>
                                         </div>
                                       </div>
                                     ))}
@@ -2067,7 +2240,7 @@ export default function AdminDashboard() {
                     <option value="COMPLETED">Completed</option>
                     <option value="CANCELLED">Cancelled</option>
                   </select>
-                <button onClick={fetchAllBookings} className="p-2 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 transition-colors flex-shrink-0">
+                <button onClick={() => fetchAllBookings()} className="p-2 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 transition-colors flex-shrink-0">
                   <RefreshCw className={`h-4 w-4 ${loadingBookings ? 'animate-spin' : ''}`} />
                 </button>
               </div>
@@ -2094,7 +2267,7 @@ export default function AdminDashboard() {
                         <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${bk.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' : bk.status === 'ON ROUTE' ? 'bg-blue-100 text-blue-700' : bk.status === 'WAITLISTED' ? 'bg-orange-100 text-orange-700' : bk.status === 'COMPLETED' ? 'bg-gray-100 text-gray-600' : 'bg-red-100 text-red-700'}`}>{bk.status}</span>
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-2">
-                        <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Date</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{new Date(bk.booking_date).toLocaleDateString()}</p></div>
+                        <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Date</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{new Date(bk.booking_date.split('T')[0] + 'T00:00:00').toLocaleDateString()}</p></div>
                         <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Route</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5 truncate">{bk.routes?.route_name || 'Direct'}</p></div>
                         <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Destination</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5 truncate">{bk.destination}</p></div>
                         <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5"><p className="text-[10px] text-gray-400 uppercase font-bold">Vehicle</p><p className="text-xs font-semibold text-gray-800 dark:text-slate-200 mt-0.5">{bk.vehicles?.vehicle_number || '—'}</p></div>
@@ -2173,7 +2346,7 @@ export default function AdminDashboard() {
                             </div>
                           </td>
                           <td className="px-4 py-3 text-sm">
-                            <p className="text-gray-900 dark:text-slate-200 font-medium">{new Date(bk.booking_date).toLocaleDateString()}</p>
+                            <p className="text-gray-900 dark:text-slate-200 font-medium">{new Date(bk.booking_date.split('T')[0] + 'T00:00:00').toLocaleDateString()}</p>
                             <p className="text-xs text-gray-400">{bk.routes?.estimated_time || bk.vehicles?.estimated_time || (bk.pickup_point?.match(/^\[(.*?)\]/)?.[1] || '—')}</p>
                           </td>
                           <td className="px-4 py-3 text-sm">
@@ -2219,7 +2392,7 @@ export default function AdminDashboard() {
                                   <div className="space-y-2">
                                     <div className="flex justify-between text-sm"><span className="text-gray-500">Employee</span><span className="font-medium text-gray-900 dark:text-white">{bk.employees?.name || 'N/A'}</span></div>
                                     <div className="flex justify-between text-sm"><span className="text-gray-500">Department</span><span className="font-medium text-gray-900 dark:text-white">{bk.employees?.department || 'N/A'}</span></div>
-                                    <div className="flex justify-between text-sm"><span className="text-gray-500">Urgency</span><span className="font-medium text-gray-900 dark:text-white">{bk.urgency}</span></div>
+                                    <div className="flex justify-between text-sm"><span className="text-gray-500">Reason</span><span className="font-medium text-gray-900 dark:text-white">{bk.reason || '—'}</span></div>
                                     <div className="flex justify-between text-sm"><span className="text-gray-500">Created At</span><span className="font-medium text-gray-900 dark:text-white">{new Date(bk.created_at).toLocaleString()}</span></div>
                                   </div>
                                 </div>
@@ -2478,6 +2651,75 @@ export default function AdminDashboard() {
               </div>
             </div>
           )}
+
+          {activeTab === 'gate-passes' && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold mb-4">Goods on Travel (Gate Passes)</h2>
+              {loadingGatePasses ? (
+                <div className="flex justify-center p-8"><RefreshCw className="h-6 w-6 animate-spin text-blue-500" /></div>
+              ) : gatePasses.length === 0 ? (
+                <div className="p-8 text-center bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700">
+                  <p className="text-gray-500 dark:text-slate-400">No gate passes found.</p>
+                </div>
+              ) : (
+                gatePasses.map(gp => (
+                  <div key={gp.id} className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <h4 className="font-bold text-gray-900 dark:text-white text-lg">{gp.gate_pass_number}</h4>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                          gp.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 
+                          gp.status === 'DENIED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
+                        }`}>{gp.status}</span>
+                        <span className="text-[10px] font-bold uppercase bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 px-2 py-0.5 rounded border border-gray-200 dark:border-slate-600">{gp.material_type}</span>
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-slate-300 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1">
+                        <p>Requested by: <b className="text-gray-900 dark:text-white">{gp.employees?.name}</b> ({gp.employees?.department})</p>
+                        <p>Dispatched to: <b className="text-gray-900 dark:text-white">{gp.dispatched_to}</b></p>
+                        <p>Purpose: {gp.purpose || '—'}</p>
+                        <p>Expected Return: {gp.expected_return_date ? new Date(gp.expected_return_date).toLocaleDateString() : '—'}</p>
+                      </div>
+                      
+                      {gp.gate_pass_materials?.length > 0 && (
+                        <div className="mt-3 text-xs bg-gray-50 dark:bg-slate-900/50 rounded-lg p-2 border border-gray-100 dark:border-slate-700">
+                          <p className="font-semibold mb-1 text-gray-700 dark:text-slate-300">Materials ({gp.gate_pass_materials.length}):</p>
+                          <ul className="list-disc list-inside text-gray-600 dark:text-slate-400">
+                            {gp.gate_pass_materials.map(m => (
+                              <li key={m.id}>{m.quantity} {m.uom} of {m.description} {m.remarks && `(${m.remarks})`}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {gp.status === 'PENDING' && (
+                      <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0 shrink-0">
+                        <button onClick={async () => {
+                          try {
+                            await axios.patch(`${API}/gate-passes/${gp.id}/status`, { status: 'APPROVED' });
+                            fetchGatePasses();
+                            setToast({show: true, message: 'Gate Pass Approved', type: 'success'});
+                          } catch(e) {}
+                        }} className="flex-1 md:flex-none px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">
+                          Approve
+                        </button>
+                        <button onClick={async () => {
+                          try {
+                            await axios.patch(`${API}/gate-passes/${gp.id}/status`, { status: 'DENIED' });
+                            fetchGatePasses();
+                            setToast({show: true, message: 'Gate Pass Denied', type: 'error'});
+                          } catch(e) {}
+                        }} className="flex-1 md:flex-none px-4 py-2 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 rounded-lg text-sm font-medium transition-colors">
+                          Deny
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
         </div>
       </div>
       
@@ -2487,6 +2729,8 @@ export default function AdminDashboard() {
         onConfirm={confirmModal.onConfirm}
         title={confirmModal.title}
         message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        type={confirmModal.type}
       />
 
       <Toast 
@@ -2652,29 +2896,70 @@ function ModernDatePicker({ value, onChange, label, required }) {
   );
 }
 
-function ConfirmModal({ isOpen, onClose, onConfirm, title, message }) {
+function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText, cancelText, type }) {
   if (!isOpen) return null;
+
+  const actualType = type || 'danger';
+  const actualConfirmText = confirmText || 'Delete';
+  const actualCancelText = cancelText || 'Cancel';
+
+  const isDanger = actualType === 'danger';
+  const isWarning = actualType === 'warning';
+  const isSuccess = actualType === 'success';
+
+  const iconColor = isDanger 
+    ? 'text-red-600' 
+    : isWarning 
+    ? 'text-amber-600' 
+    : isSuccess 
+    ? 'text-green-600' 
+    : 'text-blue-600';
+
+  const iconBg = isDanger 
+    ? 'bg-red-50 dark:bg-red-900/20' 
+    : isWarning 
+    ? 'bg-amber-50 dark:bg-amber-900/20' 
+    : isSuccess 
+    ? 'bg-green-50 dark:bg-green-900/20' 
+    : 'bg-blue-50 dark:bg-blue-900/20';
+
+  const btnColor = isDanger 
+    ? 'bg-red-600 hover:bg-red-700 shadow-red-200 dark:shadow-none' 
+    : isWarning 
+    ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-200 dark:shadow-none' 
+    : isSuccess
+    ? 'bg-green-600 hover:bg-green-700 shadow-green-200 dark:shadow-none'
+    : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200 dark:shadow-none';
+
+  const IconComponent = isDanger 
+    ? AlertCircle 
+    : isWarning 
+    ? AlertTriangle 
+    : isSuccess 
+    ? CheckCircle2 
+    : AlertCircle;
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
       <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-slate-700" onClick={e => e.stopPropagation()}>
         <div className="p-6 text-center">
-          <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="h-8 w-8 text-red-600" />
+          <div className={`w-16 h-16 ${iconBg} rounded-full flex items-center justify-center mx-auto mb-4 transition-colors`}>
+            <IconComponent className={`h-8 w-8 ${iconColor}`} />
           </div>
           <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{title}</h3>
-          <p className="text-gray-500 dark:text-slate-400 mb-6">{message}</p>
+          <p className="text-gray-500 dark:text-slate-400 mb-6 text-sm leading-relaxed">{message}</p>
           <div className="flex space-x-3">
             <button 
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 rounded-xl font-medium hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+              className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 rounded-xl font-medium hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors shadow-sm"
             >
-              Cancel
+              {actualCancelText}
             </button>
             <button 
               onClick={() => { if(onConfirm) onConfirm(); onClose(); }}
-              className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors shadow-lg shadow-red-200 dark:shadow-none"
+              className={`flex-1 px-4 py-2.5 ${btnColor} text-white rounded-xl font-medium transition-colors shadow-lg`}
             >
-              Delete
+              {actualConfirmText}
             </button>
           </div>
         </div>

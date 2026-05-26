@@ -1,28 +1,55 @@
-import React, { useState } from 'react';
-import { User, Camera, Moon, Sun, Monitor, Bell, Shield, Key, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Camera, Moon, Sun, Monitor, Bell, Shield, Key, Save, Loader2 } from 'lucide-react';
 import { useTheme } from '../App';
+import axios from 'axios';
+
+const API = window.location.origin.includes('5173') ? `http://${window.location.hostname}:5000/api` : '/api';
 
 export default function ProfileSettings() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const { theme, setTheme } = useTheme();
-  const [profilePic, setProfilePic] = useState(null);
+  const [profilePic, setProfilePic] = useState(user.profile_pic || null);
   const [activeSettingsTab, setActiveSettingsTab] = useState('profile');
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = React.useRef(null);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      const url = URL.createObjectURL(file);
-      setProfilePic(url);
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      setUploading(true);
+      try {
+        const res = await axios.post(`${API}/employees/${user.id}/profile-pic`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        
+        const newPicUrl = res.data.profile_pic;
+        setProfilePic(newPicUrl);
+        
+        // Update user in localStorage
+        const updatedUser = { ...user, profile_pic: newPicUrl };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      } catch (err) {
+        console.error('Failed to upload profile picture', err);
+        alert('Failed to upload profile picture. Please try again.');
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
   const handleRemovePic = () => {
+    // In a full implementation, you would also delete from the backend/Supabase Storage here.
     setProfilePic(null);
+    const updatedUser = { ...user };
+    delete updatedUser.profile_pic;
+    localStorage.setItem('user', JSON.stringify(updatedUser));
   };
 
   return (
@@ -93,8 +120,8 @@ export default function ProfileSettings() {
                           accept="image/png, image/jpeg, image/gif"
                           onChange={handleFileChange}
                         />
-                        <button onClick={handleUploadClick} className="px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
-                          Upload New
+                        <button disabled={uploading} onClick={handleUploadClick} className="px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors disabled:opacity-50">
+                          {uploading ? <><Loader2 className="animate-spin inline-block h-4 w-4 mr-1" /> Uploading...</> : 'Upload New'}
                         </button>
                         <button onClick={handleRemovePic} className="px-4 py-2 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors border border-transparent">
                           Remove
