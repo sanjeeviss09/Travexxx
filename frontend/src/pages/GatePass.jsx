@@ -1,8 +1,9 @@
+import { downloadGatePassPDF } from '../utils/pdfGenerator';
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   Box, Plus, Trash2, Calendar, ClipboardList, CheckCircle, 
-  AlertCircle, RefreshCw, ChevronDown, ChevronUp, ArrowRight, Truck 
+  AlertCircle, RefreshCw, ChevronDown, ChevronUp, ArrowRight, Truck, Download 
 } from 'lucide-react';
 
 const API = window.location.origin.includes('5173') ? `http://${window.location.hostname}:5000/api` : '/api';
@@ -12,6 +13,36 @@ const getLocalDateString = (date) => {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+};
+
+const formatWhatsAppLink = (mobile, message) => {
+  let cleaned = mobile ? mobile.replace(/\D/g, '') : '';
+  if (cleaned && cleaned.length === 10) {
+    cleaned = '91' + cleaned;
+  }
+  return cleaned ? `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}` : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+};
+
+const getWhatsAppMessage = (gp) => {
+  const statusEmoji = gp.status === 'APPROVED' ? '✅' : gp.status === 'DENIED' ? '❌' : '⏳';
+  const name = gp.employees?.name || gp.drivers?.name || '—';
+  const dept = gp.employees?.department || (gp.drivers ? 'Driver' : '—');
+  const materials = (gp.gate_pass_materials || []).map(m => `• ${m.quantity} ${m.uom} of ${m.description}`).join('\n') || 'None';
+  
+  return `*REVEXY TRANSPORT LOGISTICS*
+*MATERIAL GATE PASS REPORT*
+
+*Pass No:* ${gp.gate_pass_number}
+*Status:* ${gp.status} ${statusEmoji}
+*Requestor:* ${name} (${dept})
+*Dispatched To:* ${gp.dispatched_to}
+*Purpose:* ${gp.purpose || '—'}
+*Material Type:* ${gp.material_type}
+${gp.expected_return_date ? `*Expected Return:* ${new Date(gp.expected_return_date).toLocaleDateString('en-IN')}\n` : ''}
+*Materials:*
+${materials}
+
+Generated via ReVexy Transport Platform.`;
 };
 
 export default function GatePass() {
@@ -100,7 +131,8 @@ export default function GatePass() {
     setError(null);
     try {
       const payload = {
-        employee_id: user.id,
+        employee_id: user.role === 'DRIVER' ? null : user.id,
+        driver_id: user.role === 'DRIVER' ? user.id : null,
         invoice_dc_no: formData.invoice_dc_no,
         invoice_date: formData.invoice_date,
         mode_of_transfer_vehicle_no: formData.mode_of_transfer_vehicle_no,
@@ -219,12 +251,18 @@ export default function GatePass() {
                 {/* Auto-filled details */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-gray-50 dark:bg-slate-900/40 rounded-2xl border border-gray-100 dark:border-slate-700/60 text-xs">
                   <div>
-                    <span className="font-bold text-gray-400 uppercase tracking-wide">Employee</span>
+                    <span className="font-bold text-gray-400 uppercase tracking-wide">
+                      {user.role === 'DRIVER' ? 'Driver' : 'Employee'}
+                    </span>
                     <p className="text-sm font-semibold text-gray-900 dark:text-white mt-0.5">{user.name}</p>
                   </div>
                   <div>
-                    <span className="font-bold text-gray-400 uppercase tracking-wide">Department</span>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white mt-0.5">{user.department || '—'}</p>
+                    <span className="font-bold text-gray-400 uppercase tracking-wide">
+                      {user.role === 'DRIVER' ? 'Role' : 'Department'}
+                    </span>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white mt-0.5">
+                      {user.role === 'DRIVER' ? 'DRIVER' : (user.department || '—')}
+                    </p>
                   </div>
                   <div>
                     <span className="font-bold text-gray-400 uppercase tracking-wide">Date</span>
@@ -471,6 +509,26 @@ export default function GatePass() {
                       </div>
 
                       <div className="flex items-center justify-between sm:justify-end gap-3">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); downloadGatePassPDF(gp); }}
+                          className="flex items-center gap-1.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-650 dark:text-slate-200 px-3 py-1.5 rounded-xl transition-all shadow-sm flex-shrink-0"
+                          title="Download Gate Pass Slip"
+                        >
+                          <Download className="h-3.5 w-3.5" /> Download PDF
+                        </button>
+                        <a
+                          href={formatWhatsAppLink(null, getWhatsAppMessage(gp))}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1.5 text-[10px] font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-xl transition-all shadow-sm flex-shrink-0"
+                          title="Share via WhatsApp"
+                        >
+                          <svg className="h-3.5 w-3.5 fill-current" viewBox="0 0 24 24">
+                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.262 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.864-9.864.002-2.637-1.019-5.116-2.877-6.974C16.596 1.906 14.12 1.88 11.482 1.88c-5.442 0-9.867 4.42-9.871 9.863-.001 1.737.453 3.424 1.316 4.922L1.87 22.082l5.777-1.513c-.02-.13-.01-.01-.01-.01zm9.643-6.522c.288-.144.288-.48.288-.48s-.576-.288-.96-.48c-.384-.192-.48-.288-.576-.288s-.192 0-.288.144c-.096.144-.48.576-.576.672s-.192.096-.384 0a5.617 5.617 0 0 1-1.587-.98c-.624-.556-1.045-1.243-1.167-1.45-.122-.208-.013-.32.093-.425.096-.095.192-.224.288-.336.096-.112.128-.192.192-.32.064-.128.032-.24-.016-.336-.048-.096-.432-1.04-.592-1.424-.156-.374-.316-.324-.432-.33-.112-.006-.24-.006-.368-.006-.128 0-.336.048-.512.24-.176.192-.672.656-.672 1.6s.688 1.856.784 2c.096.144 1.354 2.068 3.28 2.9c.458.197.815.316 1.093.404.46.146.879.125 1.21.076.369-.055 1.137-.464 1.296-.912z"/>
+                          </svg>
+                          WhatsApp
+                        </a>
                         {gp.booking_id && (
                           <div className="flex items-center gap-1 text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 px-2 py-1 rounded-xl">
                             <Truck className="h-3 w-3" /> Linked to Cab

@@ -276,6 +276,7 @@ export default function BookTransport() {
                     value={formData.date}
                     onChange={e => setFormData({ ...formData, date: e.target.value, route_id: '', returnRouteId: '' })}
                     className="input-field pl-12"
+                    style={{ paddingLeft: '2.85rem' }}
                   />
                 </div>
               </div>

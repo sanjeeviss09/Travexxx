@@ -33,7 +33,10 @@ const AIAssistant = () => {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ messages: newMessages })
+        body: JSON.stringify({ 
+          messages: newMessages,
+          user: JSON.parse(localStorage.getItem('user') || '{}')
+        })
       });
       
       const data = await response.json();

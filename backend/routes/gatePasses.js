@@ -13,11 +13,12 @@ router.get('/', async (req, res) => {
         *,
         gate_pass_materials(*),
         employees(name, department, employee_id, mobile),
+        drivers(name, driver_id, mobile),
         bookings(id, vehicle_id, booking_date, pickup_point, destination)
       `);
     
     if (employee_id) {
-      query = query.eq('employee_id', employee_id);
+      query = query.or(`employee_id.eq.${employee_id},driver_id.eq.${employee_id}`);
     }
     
     const { data, error } = await query.order('created_at', { ascending: false });
@@ -64,24 +65,25 @@ router.patch('/:id/status', async (req, res) => {
       .from('gate_passes')
       .update({ status })
       .eq('id', id)
-      .select('*, employees(email, name)')
+      .select('*, employees(email, name), drivers(name)')
       .single();
 
     if (error) throw error;
 
-    // 2. Send notification to the employee
-    if (updated && updated.employees) {
-      const emp = updated.employees;
+    // 2. Send notification to the employee or driver
+    if (updated) {
+      const recipientId = updated.employee_id || updated.driver_id;
       
       // In-app notification
       await supabase.from('notifications').insert([{
-        user_id: updated.employee_id,
+        user_id: recipientId,
         message: `Your Gate Pass (${updated.gate_pass_number}) has been ${status}.`,
         read_status: false
       }]);
 
-      // Email notification
-      if (emp.email) {
+      // Email notification (employees only)
+      if (updated.employees && updated.employees.email) {
+        const emp = updated.employees;
         let msg = `Your Gate Pass request (${updated.gate_pass_number}) has been ${status} by the Admin.`;
         sendEmail(
           emp.email,
@@ -101,7 +103,7 @@ router.patch('/:id/status', async (req, res) => {
 // POST / (Create a new Gate Pass)
 router.post('/', async (req, res) => {
   const { 
-    booking_id, employee_id, invoice_dc_no, invoice_date, mode_of_transfer_vehicle_no, 
+    booking_id, employee_id, driver_id, invoice_dc_no, invoice_date, mode_of_transfer_vehicle_no, 
     purpose, dispatched_to, material_type, expected_return_date, materials 
   } = req.body;
 
@@ -124,7 +126,8 @@ router.post('/', async (req, res) => {
       .insert([{
         gate_pass_number,
         booking_id,
-        employee_id,
+        employee_id: employee_id || null,
+        driver_id: driver_id || null,
         invoice_dc_no,
         invoice_date: invoice_date || null,
         mode_of_transfer_vehicle_no,

@@ -1,3 +1,4 @@
+import { downloadGatePassPDF } from '../utils/pdfGenerator';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -7,7 +8,7 @@ import {
   Truck, MapPin, Users, CheckCircle2, Clock, AlertCircle,
   Bell, User, LogOut, ChevronRight, Play, Square, Navigation,
   Phone, X, LayoutDashboard, ClipboardList, Settings, Fuel,
-  Droplet, Zap, Box, RefreshCw
+  Droplet, Zap, Box, RefreshCw, Download
 } from 'lucide-react';
 
 
@@ -418,6 +419,36 @@ function TripDetailSheet({ trip, onClose, onStartTrip, onEndTrip }) {
     </>
   );
 }
+
+const formatWhatsAppLink = (mobile, message) => {
+  let cleaned = mobile ? mobile.replace(/\D/g, '') : '';
+  if (cleaned && cleaned.length === 10) {
+    cleaned = '91' + cleaned;
+  }
+  return cleaned ? `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}` : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+};
+
+const getWhatsAppMessage = (gp) => {
+  const statusEmoji = gp.status === 'APPROVED' ? '✅' : gp.status === 'DENIED' ? '❌' : '⏳';
+  const name = gp.employees?.name || gp.drivers?.name || '—';
+  const dept = gp.employees?.department || (gp.drivers ? 'Driver' : '—');
+  const materials = (gp.gate_pass_materials || []).map(m => `• ${m.quantity} ${m.uom} of ${m.description}`).join('\n') || 'None';
+  
+  return `*REVEXY TRANSPORT LOGISTICS*
+*MATERIAL GATE PASS REPORT*
+
+*Pass No:* ${gp.gate_pass_number}
+*Status:* ${gp.status} ${statusEmoji}
+*Requestor:* ${name} (${dept})
+*Dispatched To:* ${gp.dispatched_to}
+*Purpose:* ${gp.purpose || '—'}
+*Material Type:* ${gp.material_type}
+${gp.expected_return_date ? `*Expected Return:* ${new Date(gp.expected_return_date).toLocaleDateString('en-IN')}\n` : ''}
+*Materials:*
+${materials}
+
+Generated via ReVexy Transport Platform.`;
+};
 
 export default function DriverDashboard() {
   const navigate = useNavigate();
@@ -1004,13 +1035,34 @@ export default function DriverDashboard() {
               <div key={gp.id} className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-gray-150 dark:border-slate-700/60 shadow-sm space-y-4">
                 <div className="flex justify-between items-start flex-wrap gap-2">
                   <div>
-                    <span className="font-extrabold text-sm text-gray-900 dark:text-white tracking-wide">{gp.gate_pass_number}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-sm text-gray-900 dark:text-white tracking-wide">{gp.gate_pass_number}</span>
+                      <button 
+                        onClick={() => downloadGatePassPDF(gp)}
+                        className="flex items-center gap-1 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 px-2 py-1 rounded-lg transition-all shadow-sm"
+                        title="Download Gate Pass Slip"
+                      >
+                        <Download className="h-3 w-3" /> Download
+                      </button>
+                      <a
+                        href={formatWhatsAppLink(null, getWhatsAppMessage(gp))}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-[10px] font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded-lg transition-all shadow-sm"
+                        title="Share via WhatsApp"
+                      >
+                        <svg className="h-3 w-3 fill-current" viewBox="0 0 24 24">
+                          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.262 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.864-9.864.002-2.637-1.019-5.116-2.877-6.974C16.596 1.906 14.12 1.88 11.482 1.88c-5.442 0-9.867 4.42-9.871 9.863-.001 1.737.453 3.424 1.316 4.922L1.87 22.082l5.777-1.513c-.02-.13-.01-.01-.01-.01zm9.643-6.522c.288-.144.288-.48.288-.48s-.576-.288-.96-.48c-.384-.192-.48-.288-.576-.288s-.192 0-.288.144c-.096.144-.48.576-.576.672s-.192.096-.384 0a5.617 5.617 0 0 1-1.587-.98c-.624-.556-1.045-1.243-1.167-1.45-.122-.208-.013-.32.093-.425.096-.095.192-.224.288-.336.096-.112.128-.192.192-.32.064-.128.032-.24-.016-.336-.048-.096-.432-1.04-.592-1.424-.156-.374-.316-.324-.432-.33-.112-.006-.24-.006-.368-.006-.128 0-.336.048-.512.24-.176.192-.672.656-.672 1.6s.688 1.856.784 2c.096.144 1.354 2.068 3.28 2.9c.458.197.815.316 1.093.404.46.146.879.125 1.21.076.369-.055 1.137-.464 1.296-.912z"/>
+                        </svg>
+                        WhatsApp
+                      </a>
+                    </div>
                     <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-slate-400">
-                      <span>Sender: <strong className="font-semibold text-gray-800 dark:text-slate-200">{gp.employees?.name}</strong> ({gp.employees?.department})</span>
-                      {gp.employees?.mobile && (
+                      <span>Sender: <strong className="font-semibold text-gray-800 dark:text-slate-200">{gp.employees?.name || gp.drivers?.name}</strong> ({gp.employees?.department || 'Driver'})</span>
+                      {(gp.employees?.mobile || gp.drivers?.mobile) && (
                         <>
                           <span>·</span>
-                          <a href={`tel:${gp.employees.mobile}`} className="text-blue-600 dark:text-blue-400 font-semibold hover:underline">Call: {gp.employees.mobile}</a>
+                          <a href={`tel:${gp.employees?.mobile || gp.drivers?.mobile}`} className="text-blue-600 dark:text-blue-400 font-semibold hover:underline">Call: {gp.employees?.mobile || gp.drivers?.mobile}</a>
                         </>
                       )}
                     </div>

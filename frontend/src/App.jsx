@@ -10,6 +10,7 @@ import ProfileSettings from './pages/ProfileSettings';
 import DriverLogin from './pages/DriverLogin';
 import DriverDashboard from './pages/DriverDashboard';
 import GatePass from './pages/GatePass';
+import AdminChatbot from './pages/AdminChatbot';
 import AIAssistant from './components/AIAssistant';
 
 import { User, Camera, Moon, Sun, Monitor, Bell, Shield, Key, Save } from 'lucide-react';
@@ -68,6 +69,7 @@ function App() {
           <Route path="admin/external" element={<AdminDashboard />} />
           <Route path="admin/routes" element={<AdminDashboard />} />
           <Route path="admin/gate-passes" element={<AdminDashboard />} />
+          <Route path="admin/chatbot" element={<AdminChatbot />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />

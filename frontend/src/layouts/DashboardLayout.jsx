@@ -6,7 +6,7 @@ import { API } from '../config/api.js';
 import {
   LayoutDashboard, LogOut, Truck, Settings, Users,
   Bell, Car, MapPin, ClipboardList, AlertCircle, ChevronRight,
-  X, CheckCheck, Menu, Box
+  X, CheckCheck, Menu, Box, Bot
 } from 'lucide-react';
 
 
@@ -126,6 +126,7 @@ export default function DashboardLayout() {
     { name: 'Bookings', path: '/admin/bookings', icon: ClipboardList },
     { name: 'Ext. Requests', path: '/admin/external', icon: AlertCircle },
     { name: 'Goods on Travel', path: '/admin/gate-passes', icon: Box },
+    { name: 'AI Advisor', path: '/admin/chatbot', icon: Bot },
     { name: 'Routes', path: '/admin/routes', icon: MapPin },
     { name: 'Settings', path: '/settings', icon: Settings },
   ];

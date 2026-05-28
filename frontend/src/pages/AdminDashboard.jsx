@@ -1,3 +1,4 @@
+import { downloadGatePassPDF } from '../utils/pdfGenerator';
 import React, { useState, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import axios from 'axios';
@@ -7,7 +8,7 @@ import {
   Upload, FileSpreadsheet, CheckCircle2, XCircle, Eye, Edit2, Trash2,
   MoreVertical, Search, Filter, Plus, RefreshCw, X, MapPin, ChevronRight,
   ChevronLeft, Calendar as CalendarIcon, Clock, ChevronDown, Download, Fuel,
-  AlertTriangle, Mail
+  AlertTriangle, Mail, Shield
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
@@ -672,6 +673,37 @@ function AddRouteModal({ onClose, onSuccess, editData, vehiclesList }) {
   );
 }
 
+const formatWhatsAppLink = (mobile, message) => {
+  if (!mobile) return '';
+  let cleaned = mobile.replace(/\D/g, '');
+  if (cleaned.length === 10) {
+    cleaned = '91' + cleaned;
+  }
+  return `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
+};
+
+const getWhatsAppMessage = (gp) => {
+  const statusEmoji = gp.status === 'APPROVED' ? '✅' : gp.status === 'DENIED' ? '❌' : '⏳';
+  const name = gp.employees?.name || gp.drivers?.name || '—';
+  const dept = gp.employees?.department || (gp.drivers ? 'Driver' : '—');
+  const materials = (gp.gate_pass_materials || []).map(m => `• ${m.quantity} ${m.uom} of ${m.description}`).join('\n') || 'None';
+  
+  return `*REVEXY TRANSPORT LOGISTICS*
+*MATERIAL GATE PASS REPORT*
+
+*Pass No:* ${gp.gate_pass_number}
+*Status:* ${gp.status} ${statusEmoji}
+*Requestor:* ${name} (${dept})
+*Dispatched To:* ${gp.dispatched_to}
+*Purpose:* ${gp.purpose || '—'}
+*Material Type:* ${gp.material_type}
+${gp.expected_return_date ? `*Expected Return:* ${new Date(gp.expected_return_date).toLocaleDateString('en-IN')}\n` : ''}
+*Materials:*
+${materials}
+
+Generated via ReVexy Transport Platform.`;
+};
+
 export default function AdminDashboard() {
   const [showImport, setShowImport] = useState(false);
   const [showAddVehicle, setShowAddVehicle] = useState(false);
@@ -946,6 +978,37 @@ export default function AdminDashboard() {
         } catch (error) {
           console.error('Failed to reset password', error);
           showToast(error.response?.data?.error || 'Failed to reset password', 'error');
+        }
+      }
+    });
+  };
+
+  const handleToggleAdmin = (emp) => {
+    const newRole = emp.role === 'ADMIN' ? 'EMPLOYEE' : 'ADMIN';
+    const actionText = newRole === 'ADMIN' ? 'upgraded to Admin' : 'downgraded to Employee';
+    
+    setConfirmModal({
+      show: true,
+      title: newRole === 'ADMIN' ? 'Upgrade to Admin' : 'Downgrade to Employee',
+      message: `Are you sure you want to change ${emp.name}'s role to ${newRole}?`,
+      confirmText: newRole === 'ADMIN' ? 'Upgrade' : 'Downgrade',
+      type: 'warning',
+      onConfirm: async () => {
+        try {
+          await axios.put(`${API}/employees/${emp.id}`, {
+            employee_id: emp.employee_id,
+            name: emp.name,
+            email: emp.email,
+            mobile: emp.mobile,
+            department: emp.department,
+            designation: emp.designation,
+            role: newRole
+          });
+          showToast(`${emp.name} has been ${actionText} successfully.`, 'success');
+          fetchEmployees();
+        } catch (error) {
+          console.error('Failed to change employee role', error);
+          showToast(error.response?.data?.error || 'Failed to update employee role.', 'error');
         }
       }
     });
@@ -1744,6 +1807,7 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div className="flex gap-1">
+                        <button title={emp.role === 'ADMIN' ? "Downgrade to Employee" : "Upgrade to Admin"} onClick={() => handleToggleAdmin(emp)} className={`p-2 rounded-xl transition-colors ${emp.role === 'ADMIN' ? 'text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/30' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-750/30'}`}><Shield className="h-4 w-4" /></button>
                         <button title="Reset Password" onClick={() => handleResetPassword(emp.id)} className="p-2 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 rounded-xl transition-colors"><AlertCircle className="h-4 w-4" /></button>
                         <button onClick={() => { setEditingEmployee(emp); setShowAddEmployee(true); }} className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-colors"><Edit2 className="h-4 w-4" /></button>
                         <button onClick={() => handleDeleteEmployee(emp.id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-colors"><Trash2 className="h-4 w-4" /></button>
@@ -1791,6 +1855,7 @@ export default function AdminDashboard() {
                         <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-300">{emp.designation}</td>
                         <td className="px-4 py-3"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${emp.account_status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>{emp.account_status === 'ACTIVE' ? '● Active' : '○ Inactive'}</span></td>
                         <td className="px-4 py-3 text-right"><div className="flex justify-end space-x-2">
+                          <button title={emp.role === 'ADMIN' ? "Downgrade to Employee" : "Upgrade to Admin"} onClick={() => handleToggleAdmin(emp)} className={`p-1.5 rounded-lg transition-colors ${emp.role === 'ADMIN' ? 'text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/30' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/30'}`}><Shield className="h-4 w-4" /></button>
                           <button title="Reset Password" onClick={() => handleResetPassword(emp.id)} className="p-1.5 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 rounded-lg transition-colors"><AlertCircle className="h-4 w-4" /></button>
                           <button title="Edit" onClick={() => { setEditingEmployee(emp); setShowAddEmployee(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"><Edit2 className="h-4 w-4" /></button>
                           <button title="Delete" onClick={() => handleDeleteEmployee(emp.id)} className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"><Trash2 className="h-4 w-4" /></button>
@@ -2674,7 +2739,7 @@ export default function AdminDashboard() {
                         <span className="text-[10px] font-bold uppercase bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 px-2 py-0.5 rounded border border-gray-200 dark:border-slate-600">{gp.material_type}</span>
                       </div>
                       <div className="text-sm text-gray-600 dark:text-slate-300 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1">
-                        <p>Requested by: <b className="text-gray-900 dark:text-white">{gp.employees?.name}</b> ({gp.employees?.department})</p>
+                        <p>Requested by: <b className="text-gray-900 dark:text-white">{gp.employees?.name || gp.drivers?.name}</b> ({gp.employees?.department || 'Driver'})</p>
                         <p>Dispatched to: <b className="text-gray-900 dark:text-white">{gp.dispatched_to}</b></p>
                         <p>Purpose: {gp.purpose || '—'}</p>
                         <p>Expected Return: {gp.expected_return_date ? new Date(gp.expected_return_date).toLocaleDateString() : '—'}</p>
@@ -2692,28 +2757,79 @@ export default function AdminDashboard() {
                       )}
                     </div>
                     
-                    {gp.status === 'PENDING' && (
-                      <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0 shrink-0">
-                        <button onClick={async () => {
-                          try {
-                            await axios.patch(`${API}/gate-passes/${gp.id}/status`, { status: 'APPROVED' });
-                            fetchGatePasses();
-                            setToast({show: true, message: 'Gate Pass Approved', type: 'success'});
-                          } catch(e) {}
-                        }} className="flex-1 md:flex-none px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">
-                          Approve
-                        </button>
-                        <button onClick={async () => {
-                          try {
-                            await axios.patch(`${API}/gate-passes/${gp.id}/status`, { status: 'DENIED' });
-                            fetchGatePasses();
-                            setToast({show: true, message: 'Gate Pass Denied', type: 'error'});
-                          } catch(e) {}
-                        }} className="flex-1 md:flex-none px-4 py-2 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 rounded-lg text-sm font-medium transition-colors">
-                          Deny
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex flex-col sm:flex-row md:flex-col gap-2 w-full md:w-auto mt-2 md:mt-0 shrink-0 items-stretch md:items-end">
+                      <button 
+                        onClick={() => downloadGatePassPDF(gp)}
+                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-650 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                        title="Download Gate Pass Slip"
+                      >
+                        <Download className="h-4 w-4" /> Download PDF
+                      </button>
+
+                      {gp.employees?.mobile && (
+                        <a
+                          href={formatWhatsAppLink(gp.employees.mobile, getWhatsAppMessage(gp))}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-sm text-center"
+                          title="Notify Employee on WhatsApp"
+                        >
+                          <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.262 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.864-9.864.002-2.637-1.019-5.116-2.877-6.974C16.596 1.906 14.12 1.88 11.482 1.88c-5.442 0-9.867 4.42-9.871 9.863-.001 1.737.453 3.424 1.316 4.922L1.87 22.082l5.777-1.513c-.02-.13-.01-.01-.01-.01zm9.643-6.522c.288-.144.288-.48.288-.48s-.576-.288-.96-.48c-.384-.192-.48-.288-.576-.288s-.192 0-.288.144c-.096.144-.48.576-.576.672s-.192.096-.384 0a5.617 5.617 0 0 1-1.587-.98c-.624-.556-1.045-1.243-1.167-1.45-.122-.208-.013-.32.093-.425.096-.095.192-.224.288-.336.096-.112.128-.192.192-.32.064-.128.032-.24-.016-.336-.048-.096-.432-1.04-.592-1.424-.156-.374-.316-.324-.432-.33-.112-.006-.24-.006-.368-.006-.128 0-.336.048-.512.24-.176.192-.672.656-.672 1.6s.688 1.856.784 2c.096.144 1.354 2.068 3.28 2.9c.458.197.815.316 1.093.404.46.146.879.125 1.21.076.369-.055 1.137-.464 1.296-.912z"/>
+                          </svg>
+                          Notify Requestor
+                        </a>
+                      )}
+                      
+                      {(() => {
+                        const driver = drivers.find(d => {
+                          if (gp.driver_id && d.id === gp.driver_id) return true;
+                          if (gp.mode_of_transfer_vehicle_no && d.vehicle && d.vehicle.vehicle_number &&
+                              d.vehicle.vehicle_number.toLowerCase().trim() === gp.mode_of_transfer_vehicle_no.toLowerCase().trim()) {
+                            return true;
+                          }
+                          return false;
+                        });
+                        if (!driver || !driver.mobile) return null;
+                        return (
+                          <a
+                            href={formatWhatsAppLink(driver.mobile, getWhatsAppMessage(gp))}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-sm text-center"
+                            title={`Notify Driver (${driver.name}) on WhatsApp`}
+                          >
+                            <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                              <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.262 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.864-9.864.002-2.637-1.019-5.116-2.877-6.974C16.596 1.906 14.12 1.88 11.482 1.88c-5.442 0-9.867 4.42-9.871 9.863-.001 1.737.453 3.424 1.316 4.922L1.87 22.082l5.777-1.513c-.02-.13-.01-.01-.01-.01zm9.643-6.522c.288-.144.288-.48.288-.48s-.576-.288-.96-.48c-.384-.192-.48-.288-.576-.288s-.192 0-.288.144c-.096.144-.48.576-.576.672s-.192.096-.384 0a5.617 5.617 0 0 1-1.587-.98c-.624-.556-1.045-1.243-1.167-1.45-.122-.208-.013-.32.093-.425.096-.095.192-.224.288-.336.096-.112.128-.192.192-.32.064-.128.032-.24-.016-.336-.048-.096-.432-1.04-.592-1.424-.156-.374-.316-.324-.432-.33-.112-.006-.24-.006-.368-.006-.128 0-.336.048-.512.24-.176.192-.672.656-.672 1.6s.688 1.856.784 2c.096.144 1.354 2.068 3.28 2.9c.458.197.815.316 1.093.404.46.146.879.125 1.21.076.369-.055 1.137-.464 1.296-.912z"/>
+                            </svg>
+                            Notify Driver
+                          </a>
+                        );
+                      })()}
+
+                      {gp.status === 'PENDING' && (
+                        <div className="flex gap-2 w-full">
+                          <button onClick={async () => {
+                            try {
+                              await axios.patch(`${API}/gate-passes/${gp.id}/status`, { status: 'APPROVED' });
+                              fetchGatePasses();
+                              setToast({show: true, message: 'Gate Pass Approved', type: 'success'});
+                            } catch(e) {}
+                          }} className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">
+                            Approve
+                          </button>
+                          <button onClick={async () => {
+                            try {
+                              await axios.patch(`${API}/gate-passes/${gp.id}/status`, { status: 'DENIED' });
+                              fetchGatePasses();
+                              setToast({show: true, message: 'Gate Pass Denied', type: 'error'});
+                            } catch(e) {}
+                          }} className="flex-1 px-4 py-2 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 rounded-lg text-sm font-medium transition-colors">
+                            Deny
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))
               )}

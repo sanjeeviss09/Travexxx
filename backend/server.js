@@ -23,6 +23,7 @@ const allowedOrigins = [
   // Production web deployments
   'https://revexy-backend.onrender.com',
   'https://revexy.vercel.app',
+  'https://travexxx.vercel.app',
   // Capacitor Android / iOS (native WebView)
   'capacitor://localhost',
   'ionic://localhost',
@@ -114,10 +115,10 @@ server.listen(PORT, () => {
 
   // Start background jobs
   const { startAutoCancelJob } = require('./jobs/autoCancelJob');
-  const { startEmailListener } = require('./services/emailListener');
+  const { startNotificationListener } = require('./services/notificationListener');
 
   startAutoCancelJob();
-  startEmailListener();
+  startNotificationListener();
 
   // ── Keep-alive self-ping every 5 min to prevent Render free tier sleep ──
   const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
