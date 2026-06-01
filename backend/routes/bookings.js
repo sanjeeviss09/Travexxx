@@ -537,20 +537,50 @@ router.post('/request', async (req, res) => {
       return res.status(400).json({ error: 'You already have an active booking for this date. Multi-booking is not allowed.' });
     }
     
-    const { data: employee } = await supabase
-      .from('employees')
-      .select('priority_level')
-      .eq('id', employee_id)
-      .single();
+    let employee = null;
+    let requestedPriority = 5;
 
-    if (!employee) {
-      console.warn(`[Booking Request] Employee ${employee_id} not found`);
-      return res.status(404).json({ error: 'Employee not found' });
+    if (type === 'EXTERNAL_GUEST') {
+      requestedPriority = 1; // Highest priority for admin external guest booking
+    } else {
+      const { data: empData } = await supabase
+        .from('employees')
+        .select('priority_level')
+        .eq('id', employee_id)
+        .single();
+
+      if (!empData) {
+        console.warn(`[Booking Request] Employee ${employee_id} not found`);
+        return res.status(404).json({ error: 'Employee not found' });
+      }
+      employee = empData;
+      requestedPriority = employee.priority_level;
     }
 
     let allocatedVehicle = null;
     let allocatedRoute = null;
     let waitlisted = false;
+    let bookingToBump = null; // Store the ID of the booking to bump if needed
+
+    // Helper function to check capacity and potential bumping
+    const checkCapacityAndBumping = (activeBookings, capacity, reqPriority) => {
+      const occupiedCount = activeBookings?.length || 0;
+      if (occupiedCount < capacity) {
+        return { canAllocate: true, bumpId: null };
+      }
+      // Full capacity, check for bumping
+      const bumpableBookings = activeBookings?.filter(b => b.priority > reqPriority);
+      if (bumpableBookings && bumpableBookings.length > 0) {
+        // Find the one with the highest priority number (lowest actual priority)
+        // If tie, pick the one created last (youngest booking gets bumped)
+        bumpableBookings.sort((a, b) => {
+          if (b.priority !== a.priority) return b.priority - a.priority; // Descending priority number
+          return new Date(b.created_at) - new Date(a.created_at); // Descending created_at
+        });
+        return { canAllocate: true, bumpId: bumpableBookings[0].id };
+      }
+      return { canAllocate: false, bumpId: null };
+    };
 
     // 1. If route_id is provided, try allocating that route directly
     if (route_id) {
@@ -561,23 +591,23 @@ router.post('/request', async (req, res) => {
         .single();
         
       if (routeData && routeData.vehicles) {
-        // Fix: Don't rely on stale vehicle_status field.
-        // Instead count real bookings for this route+date to determine capacity.
         const { data: activeBookings } = await supabase
           .from('bookings')
-          .select('id, route_id')
+          .select('id, route_id, priority, created_at')
           .eq('vehicle_id', routeData.vehicle_id)
           .eq('booking_date', date)
           .in('status', ['CONFIRMED', 'ON ROUTE']);
 
-        const occupiedCount = activeBookings?.filter(b => b.route_id === routeData.id).length || 0;
+        const routeBookings = activeBookings?.filter(b => b.route_id === routeData.id) || [];
+        const capacityCheck = checkCapacityAndBumping(routeBookings, routeData.vehicles.capacity, requestedPriority);
 
-        if (occupiedCount < routeData.vehicles.capacity) {
+        if (capacityCheck.canAllocate) {
           allocatedVehicle = routeData.vehicles;
           allocatedRoute = routeData;
-          console.log(`[Booking Request] Allocated explicit route: ${routeData.route_name} (${occupiedCount}/${routeData.vehicles.capacity} seats)`);
+          bookingToBump = capacityCheck.bumpId;
+          console.log(`[Booking Request] Allocated explicit route: ${routeData.route_name}. Bumping: ${bookingToBump}`);
         } else {
-          console.log(`[Booking Request] Route ${routeData.route_name} full on ${date} (${occupiedCount}/${routeData.vehicles.capacity}). Will waitlist.`);
+          console.log(`[Booking Request] Route ${routeData.route_name} full and no bumpable lower priority on ${date}. Will waitlist.`);
         }
       }
     }
@@ -590,14 +620,12 @@ router.post('/request', async (req, res) => {
         .ilike('destination', destination)
         .eq('estimated_time', timeSlot);
 
-      console.log(`[Booking Request] Matched routes found: ${matchedRoutes?.length || 0}`);
-
       if (matchedRoutes && matchedRoutes.length > 0) {
         for (let route of matchedRoutes) {
           if (route.vehicles && ['ACTIVE', 'AVAILABLE', 'Available'].includes(route.vehicles.vehicle_status)) {
             const { data: activeBookings } = await supabase
                .from('bookings')
-               .select('id, status, route_id, pickup_point, routes(estimated_time)')
+               .select('id, status, route_id, pickup_point, priority, created_at, routes(estimated_time)')
                .eq('vehicle_id', route.vehicle_id)
                .eq('booking_date', date)
                .in('status', ['CONFIRMED', 'ON ROUTE']);
@@ -610,11 +638,14 @@ router.post('/request', async (req, res) => {
 
             if (isOverlappingDifferentTrip) continue;
 
-            const occupiedCount = activeBookings?.filter(b => b.route_id === route.id).length || 0;
-            if (occupiedCount < route.vehicles.capacity) {
+            const routeBookings = activeBookings?.filter(b => b.route_id === route.id) || [];
+            const capacityCheck = checkCapacityAndBumping(routeBookings, route.vehicles.capacity, requestedPriority);
+
+            if (capacityCheck.canAllocate) {
               allocatedVehicle = route.vehicles;
               allocatedRoute = route;
-              console.log(`[Booking Request] Allocated route: ${route.route_name}`);
+              bookingToBump = capacityCheck.bumpId;
+              console.log(`[Booking Request] Allocated route: ${route.route_name}. Bumping: ${bookingToBump}`);
               break;
             }
           }
@@ -656,10 +687,13 @@ router.post('/request', async (req, res) => {
             
           if (overlap || routeOverlap) continue;
 
-          const overlappingCount = currentBookings?.filter(b => getBookingTime(b) === timeSlot).length || 0;
-          if (overlappingCount < vehicle.capacity) {
+          const slotBookings = currentBookings?.filter(b => getBookingTime(b) === timeSlot) || [];
+          const capacityCheck = checkCapacityAndBumping(slotBookings, vehicle.capacity, requestedPriority);
+
+          if (capacityCheck.canAllocate) {
             allocatedVehicle = vehicle;
-            console.log(`[Booking Request] Allocated fallback vehicle: ${vehicle.vehicle_number}`);
+            bookingToBump = capacityCheck.bumpId;
+            console.log(`[Booking Request] Allocated fallback vehicle: ${vehicle.vehicle_number}. Bumping: ${bookingToBump}`);
             break;
           }
         }
@@ -671,6 +705,51 @@ router.post('/request', async (req, res) => {
       console.log(`[Booking Request] No capacity found. Waitlisting.`);
       bookingStatus = 'WAITLISTED';
       waitlisted = true;
+    } else if (bookingToBump) {
+      // Execute bumping logic
+      console.log(`[Booking Request] Bumping booking ${bookingToBump} to waitlist.`);
+      
+      const { data: bumpedBooking } = await supabase
+        .from('bookings')
+        .select('employee_id, destination')
+        .eq('id', bookingToBump)
+        .single();
+
+      await supabase
+        .from('bookings')
+        .update({ status: 'WAITLISTED' })
+        .eq('id', bookingToBump);
+
+      // Find position for waitlist
+      const { data: existingWaitlist } = await supabase
+        .from('bookings')
+        .select('id, priority, created_at')
+        .eq('booking_date', date)
+        .eq('destination', bumpedBooking?.destination || destination)
+        .eq('status', 'WAITLISTED');
+      
+      let allWaitlisted = existingWaitlist || [];
+      allWaitlisted.sort((a, b) => {
+        if (b.priority !== a.priority) return b.priority - a.priority;
+        return new Date(a.created_at) - new Date(b.created_at);
+      });
+      const waitPosition = allWaitlisted.findIndex(b => b.id === bookingToBump) + 1;
+
+      await supabase
+        .from('waitlists')
+        .insert([{
+          booking_id: bookingToBump,
+          waitlist_position: waitPosition > 0 ? waitPosition : 1,
+          priority: allWaitlisted.find(b => b.id === bookingToBump)?.priority || 5
+        }]);
+
+      if (bumpedBooking?.employee_id) {
+        await supabase.from('notifications').insert([{
+          user_id: bumpedBooking.employee_id,
+          message: `⚠️ Urgent: Your booking for ${date} has been moved to the WAITLIST due to a high-priority administrative request.`,
+          read_status: false
+        }]);
+      }
     }
 
     const finalPickup = pickup || (allocatedRoute ? allocatedRoute.pickup_points : `[${timeSlot}] ${destination}`);

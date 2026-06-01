@@ -130,8 +130,8 @@ export default function BookTransport() {
           ? `[IN-BETWEEN] ${formData.requestedPickup}`
           : selectedRoute?.pickup_points}`,
         destination: selectedRoute?.destination,
-        type: formData.type === 'External' ? 'OTHER' : 'REGULAR',
-        reason: formData.type === 'External' ? formData.reason : null,
+        type: formData.type === 'External_Guest' ? 'EXTERNAL_GUEST' : (formData.type === 'External' ? 'OTHER' : 'REGULAR'),
+        reason: (formData.type === 'External' || formData.type === 'External_Guest') ? formData.reason : null,
         passengerCount: 1,
         urgency: 'NORMAL',
         status: 'CONFIRMED',
@@ -148,8 +148,8 @@ export default function BookTransport() {
           timeSlot: formData.returnTimeSlot,
           pickup: `[ROUND TRIP] (Return) ${returnRoute?.pickup_points}`,
           destination: returnRoute?.destination,
-          type: formData.type === 'External' ? 'OTHER' : 'REGULAR',
-          reason: formData.type === 'External' ? formData.reason : null,
+          type: formData.type === 'External_Guest' ? 'EXTERNAL_GUEST' : (formData.type === 'External' ? 'OTHER' : 'REGULAR'),
+          reason: (formData.type === 'External' || formData.type === 'External_Guest') ? formData.reason : null,
           passengerCount: 1,
           urgency: 'NORMAL',
           status: 'CONFIRMED',
@@ -517,6 +517,7 @@ export default function BookTransport() {
                 {[
                   { id: 'Regular', label: 'Regular Commute', desc: 'Standard company vehicle on a scheduled route.', Icon: Car, color: 'blue' },
                   { id: 'External', label: 'Special Request', desc: 'External vehicle for special needs. Requires approval.', Icon: Briefcase, color: 'purple' },
+                  ...(user?.role === 'ADMIN' ? [{ id: 'External_Guest', label: 'External Guest', desc: 'Book a seat for an external guest. Highest priority.', Icon: Star, color: 'amber' }] : [])
                 ].map(opt => {
                   const active = formData.type === opt.id;
                   return (
@@ -540,8 +541,10 @@ export default function BookTransport() {
               </div>
 
               <div className="animate-in fade-in slide-in-from-top-2 duration-200">
-                <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">Reason for Booking</label>
-                <textarea rows={3} placeholder="Explain why you need this transport..."
+                <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
+                  {formData.type === 'External_Guest' ? 'Guest Details (Name, Phone, Company)' : 'Reason for Booking'}
+                </label>
+                <textarea rows={3} placeholder={formData.type === 'External_Guest' ? "E.g. John Doe, 9876543210, Visiting Client" : "Explain why you need this transport..."}
                   value={formData.reason}
                   onChange={e => setFormData({ ...formData, reason: e.target.value })}
                   className="input-field resize-none"
@@ -566,12 +569,12 @@ export default function BookTransport() {
                   { label: 'From', value: formatPickup(selectedRoute?.pickup_points) },
                   { label: 'To', value: selectedRoute?.destination || '—' },
                   { label: 'Pickup', value: formData.inBetween ? `In-between: ${formData.requestedPickup}` : 'Route pickup point' },
-                  { label: 'Commute Mode', value: formData.tripType === 'one_way' ? 'One Way' : `Round Trip (${formData.returnType === 'same_vehicle' ? 'Same Vehicle' : 'Different Route'})` },
+                  { label: 'Commute Mode', value: formData.tripType === 'one_way' ? 'One Way' : `Round Trip (${formData.returnType === 'same_vehicle' ? 'Different Route' : 'Same Vehicle'})` },
                   ...(formData.tripType === 'round_trip' && formData.returnType === 'different_route' ? [
                     { label: 'Return Route', value: routes.find(r => r.id === formData.returnRouteId)?.route_name || '—' },
                     { label: 'Return Time', value: formData.returnTimeSlot || '—' }
                   ] : []),
-                  { label: 'Trip Type', value: formData.type === 'Regular' ? 'Regular Commute' : 'Special Request' },
+                  { label: 'Trip Type', value: formData.type === 'External_Guest' ? 'External Guest' : (formData.type === 'Regular' ? 'Regular Commute' : 'Special Request') },
                 ].map(({ label, value }, i) => (
                   <div key={i} className={`flex items-start justify-between gap-4 px-5 py-3.5 ${i < 6 || (formData.tripType === 'round_trip' && formData.returnType === 'different_route' && i < 8) ? 'border-b border-gray-100 dark:border-slate-800' : ''}`}>
                     <span className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide flex-shrink-0 pt-0.5">{label}</span>
@@ -582,7 +585,9 @@ export default function BookTransport() {
 
               {formData.reason && (
                 <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-900/50 rounded-2xl">
-                  <p className="text-xs font-bold text-purple-500 uppercase tracking-wide mb-1">Reason</p>
+                  <p className="text-xs font-bold text-purple-500 uppercase tracking-wide mb-1">
+                    {formData.type === 'External_Guest' ? 'Guest Details' : 'Reason'}
+                  </p>
                   <p className="text-sm text-gray-700 dark:text-slate-300">{formData.reason}</p>
                 </div>
               )}

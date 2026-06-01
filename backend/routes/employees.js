@@ -23,7 +23,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Admin: Upload HR Excel
+// Admin: Upload HR Excel (Legacy)
 router.post('/import', upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
@@ -94,6 +94,67 @@ router.post('/import', upload.single('file'), async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Failed to parse Excel file' });
   }
+});
+
+// Admin: Upload pre-parsed JSON array
+router.post('/import-json', express.json({ limit: '10mb' }), async (req, res) => {
+  const { employees } = req.body;
+  
+  if (!employees || !Array.isArray(employees)) {
+    return res.status(400).json({ error: 'Invalid payload. Expected array of employees.' });
+  }
+
+  let imported = 0;
+  let updated = 0;
+  let failed = 0;
+
+  for (const row of employees) {
+    try {
+      if (!row.employee_id || !row.name || !row.email) { failed++; continue; }
+      const priority = row.priority || 5;
+
+      const { data: existing } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('employee_id', String(row.employee_id))
+        .single();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('employees')
+          .update({
+            name: row.name,
+            email: row.email,
+            mobile: String(row.mobile || ''),
+            department: row.department || '',
+            designation: row.designation || '',
+            priority_level: priority
+          })
+          .eq('id', existing.id);
+        if (error) throw error;
+        updated++;
+      } else {
+        const { error } = await supabase
+          .from('employees')
+          .insert([{
+            employee_id: String(row.employee_id),
+            name: row.name,
+            email: row.email,
+            mobile: String(row.mobile || ''),
+            department: row.department || '',
+            designation: row.designation || '',
+            priority_level: priority,
+            account_status: 'INACTIVE'
+          }]);
+        if (error) throw error;
+        imported++;
+      }
+    } catch (err) {
+      failed++;
+    }
+  }
+
+  res.json({ message: 'Import complete', results: { imported, updated, failed } });
 });
 
 // Admin: Manual add employee

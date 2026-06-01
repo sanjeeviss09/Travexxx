@@ -159,12 +159,53 @@ function ImportModal({ onClose, onSuccess, onDownloadTemplate }) {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
   const fileRef = useRef();
+
+  const processExcel = async (f) => {
+    try {
+      const data = await f.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+      
+      const priorityMap = {
+        'Director': 1, 'Senior Manager': 2, 'Manager': 3,
+        'Team Lead': 4, 'Employee': 5, 'Intern': 6
+      };
+
+      const normalizedData = jsonData.map(row => {
+        const normRow = { mobile: '', department: '' };
+        Object.keys(row).forEach(k => {
+          const key = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (key.includes('employeeid') || key === 'id') normRow.employee_id = row[k];
+          else if (key.includes('name')) normRow.name = row[k];
+          else if (key.includes('email')) normRow.email = row[k];
+          else if (key.includes('mob') || key.includes('phone')) normRow.mobile = row[k];
+          else if (key.includes('dept') || key.includes('department')) normRow.department = row[k];
+          else if (key.includes('desig')) normRow.designation = row[k];
+        });
+        
+        normRow.employee_id = String(normRow.employee_id || '');
+        normRow.name = normRow.name || '';
+        normRow.email = normRow.email || '';
+        normRow.designation = normRow.designation || 'Employee';
+        normRow.priority = priorityMap[normRow.designation] || 5;
+        return normRow;
+      }).filter(r => r.employee_id && r.name && r.email); // Only keep valid rows
+
+      setPreviewData(normalizedData);
+    } catch (err) {
+      console.error("Failed to parse Excel file", err);
+      setResult({ success: false, message: 'Failed to read Excel file format.' });
+    }
+  };
 
   const handleFile = (f) => {
     if (f && (f.name.endsWith('.xlsx') || f.name.endsWith('.xls'))) {
       setFile(f);
       setResult(null);
+      processExcel(f);
     }
   };
 
@@ -175,18 +216,16 @@ function ImportModal({ onClose, onSuccess, onDownloadTemplate }) {
   };
 
   const handleImport = async () => {
-    if (!file) return;
+    if (!previewData || previewData.length === 0) return;
     setLoading(true);
-    const formData = new FormData();
-    formData.append('file', file);
     try {
-      const res = await axios.post(`${API}/employees/import`, formData, {
+      const res = await axios.post(`${API}/employees/import-json`, { employees: previewData }, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token')}`
         }
       });
-      setResult({ success: true, count: res.data.count, message: 'Employees imported successfully' });
+      setResult({ success: true, count: res.data.results.imported + res.data.results.updated, message: 'Employees imported successfully' });
       setTimeout(onSuccess, 2000);
     } catch (err) {
       setResult({ success: false, message: err.response?.data?.error || 'Import failed' });
@@ -197,7 +236,7 @@ function ImportModal({ onClose, onSuccess, onDownloadTemplate }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-gray-100 dark:border-slate-700 transition-colors" onClick={e => e.stopPropagation()}>
+      <div className={`bg-white dark:bg-slate-800 rounded-2xl w-full ${previewData && !result ? 'max-w-4xl' : 'max-w-md'} shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-gray-100 dark:border-slate-700 transition-all`} onClick={e => e.stopPropagation()}>
         <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-900/50">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white">Import HR Excel Data</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 transition-colors">
@@ -207,50 +246,89 @@ function ImportModal({ onClose, onSuccess, onDownloadTemplate }) {
         <div className="p-6">
           {!result ? (
             <div className="space-y-4">
-              <div
-                className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${dragOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-800'}`}
-                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-              >
-                <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <FileSpreadsheet className="h-6 w-6" />
-                </div>
-                {file ? (
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{file.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{(file.size / 1024).toFixed(1)} KB</p>
-                    <button onClick={() => setFile(null)} className="text-red-500 text-xs mt-2 hover:underline">Remove file</button>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-sm text-gray-600 dark:text-slate-400">Drag and drop your Excel file here, or</p>
-                    <div className="flex flex-col items-center gap-1 mt-1">
-                      <button onClick={() => fileRef.current?.click()} className="text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline">browse files</button>
-                      <button onClick={onDownloadTemplate} className="text-gray-500 text-xs hover:text-blue-600 flex items-center transition-colors">
-                        <Download className="h-3 w-3 mr-1" />
-                        Download sample format
-                      </button>
+              {!previewData ? (
+                <>
+                  <div
+                    className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${dragOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-800'}`}
+                    onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={handleDrop}
+                  >
+                    <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <FileSpreadsheet className="h-6 w-6" />
                     </div>
-                    <p className="text-xs text-gray-400 dark:text-slate-500 mt-2">Supports .xlsx, .xls</p>
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-slate-400">Drag and drop your Excel file here, or</p>
+                      <div className="flex flex-col items-center gap-1 mt-1">
+                        <button onClick={() => fileRef.current?.click()} className="text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline">browse files</button>
+                        <button onClick={onDownloadTemplate} className="text-gray-500 text-xs hover:text-blue-600 flex items-center transition-colors">
+                          <Download className="h-3 w-3 mr-1" />
+                          Download sample format
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-400 dark:text-slate-500 mt-2">Supports .xlsx, .xls</p>
+                    </div>
+                    <input type="file" ref={fileRef} className="hidden" accept=".xlsx, .xls" onChange={e => handleFile(e.target.files[0])} />
                   </div>
-                )}
-                <input type="file" ref={fileRef} className="hidden" accept=".xlsx, .xls" onChange={e => handleFile(e.target.files[0])} />
-              </div>
 
-              <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 text-xs p-3 rounded-lg flex items-start border border-blue-100 dark:border-blue-900/50">
-                <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
-                <p>The Excel file must contain: <b>Employee ID, Name, Email, Mobile, Department, Designation, Priority.</b></p>
-              </div>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 text-xs p-3 rounded-lg flex items-start border border-blue-100 dark:border-blue-900/50">
+                    <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
+                    <p>The Excel file must contain columns: <b>Employee ID, Name, Email, Mobile, Department, Designation.</b> Priorities are auto-assigned based on Designation.</p>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">Previewing: {file?.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Found {previewData.length} valid employee records.</p>
+                    </div>
+                    <button onClick={() => { setFile(null); setPreviewData(null); }} className="text-red-500 text-xs hover:underline flex items-center"><X className="w-3 h-3 mr-1" />Remove file</button>
+                  </div>
+                  
+                  <div className="overflow-x-auto border border-gray-200 dark:border-slate-700 rounded-lg max-h-60">
+                    <table className="w-full text-left text-sm text-gray-600 dark:text-slate-300">
+                      <thead className="text-xs text-gray-700 bg-gray-50 dark:bg-slate-800 dark:text-gray-300 uppercase sticky top-0">
+                        <tr>
+                          <th className="px-4 py-2">Emp ID</th>
+                          <th className="px-4 py-2">Name</th>
+                          <th className="px-4 py-2">Email</th>
+                          <th className="px-4 py-2">Designation</th>
+                          <th className="px-4 py-2">Priority</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewData.slice(0, 50).map((row, idx) => (
+                          <tr key={idx} className="border-b dark:border-slate-700 last:border-0 hover:bg-gray-50 dark:hover:bg-slate-800/50">
+                            <td className="px-4 py-2 font-medium">{row.employee_id}</td>
+                            <td className="px-4 py-2">{row.name}</td>
+                            <td className="px-4 py-2">{row.email}</td>
+                            <td className="px-4 py-2">{row.designation}</td>
+                            <td className="px-4 py-2">
+                              <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 rounded-full text-xs font-semibold">P{row.priority}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {previewData.length > 50 && <p className="text-xs text-center text-gray-500 dark:text-slate-400">Showing first 50 rows only.</p>}
+                  
+                  <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 text-xs p-3 rounded-lg flex items-start border border-blue-100 dark:border-blue-900/50">
+                    <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
+                    <p>Please review the data above. Only rows with a valid ID, Name, and Email are listed. Click 'Confirm & Import' to proceed.</p>
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end space-x-3 pt-2">
                 <button onClick={onClose} className="px-4 py-2 text-gray-600 dark:text-slate-400 text-sm font-medium hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">Cancel</button>
                 <button
                   onClick={handleImport}
-                  disabled={!file || loading}
-                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center"
+                  disabled={!previewData || loading}
+                  className="flex-1 max-w-[200px] py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center"
                 >
-                  {loading ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" />Importing...</> : <><Upload className="h-4 w-4 mr-2" />Import</>}
+                  {loading ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" />Importing...</> : <><Upload className="h-4 w-4 mr-2" />Confirm & Import</>}
                 </button>
               </div>
             </div>
@@ -261,7 +339,7 @@ function ImportModal({ onClose, onSuccess, onDownloadTemplate }) {
               </div>
               <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{result.success ? 'Import Successful!' : 'Import Failed'}</h4>
               <p className="text-sm text-gray-600 dark:text-slate-400">{result.message}</p>
-              {result.success && <p className="text-sm font-medium text-green-700 dark:text-green-400 mt-2">{result.count} employees added.</p>}
+              {result.success && <p className="text-sm font-medium text-green-700 dark:text-green-400 mt-2">{result.count} employees added/updated.</p>}
               <button onClick={onClose} className="mt-6 w-full py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-white rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">Close</button>
             </div>
           )}
@@ -2305,6 +2383,9 @@ export default function AdminDashboard() {
                     <option value="COMPLETED">Completed</option>
                     <option value="CANCELLED">Cancelled</option>
                   </select>
+                <button onClick={() => window.location.href = '/book'} className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm transition-colors flex items-center gap-2 flex-shrink-0">
+                  <Plus className="h-4 w-4" /> New Booking
+                </button>
                 <button onClick={() => fetchAllBookings()} className="p-2 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 transition-colors flex-shrink-0">
                   <RefreshCw className={`h-4 w-4 ${loadingBookings ? 'animate-spin' : ''}`} />
                 </button>
